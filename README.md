@@ -1,8 +1,11 @@
-# Tmux Resurrect
-
-[![Build Status](https://travis-ci.org/tmux-plugins/tmux-resurrect.svg?branch=master)](https://travis-ci.org/tmux-plugins/tmux-resurrect)
+# Tmux Persist
 
 Restore `tmux` environment after system restart.
+
+> `tmux-persist` is a maintained fork of the (abandoned)
+> [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect). It fixes
+> pane-contents capture so each session is saved and restored separately, and
+> enables pane-contents capture by default.
 
 Tmux is great, except when you have to restart the computer. You lose all the
 running programs, working directories, pane layouts etc.
@@ -10,7 +13,7 @@ There are helpful management tools out there, but they require initial
 configuration and continuous updates as your workflow evolves or you start new
 projects.
 
-`tmux-resurrect` saves all the little details from your tmux environment so it
+`tmux-persist` saves all the little details from your tmux environment so it
 can be completely restored after a system restart (or when you feel like it).
 No configuration is required. You should feel like you never quit tmux.
 
@@ -44,18 +47,20 @@ This plugin goes to great lengths to save and restore all the details from your
 - "grouped sessions" (useful feature when using tmux with multiple monitors)
 - programs running within a pane! More details in the
   [restoring programs doc](docs/restoring_programs.md).
+- **pane contents** (the visual command history of each pane), saved
+  separately per session and enabled by default. See
+  [restoring pane contents](docs/restoring_pane_contents.md).
 
 Optional:
 
 - [restoring vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)
-- [restoring pane contents](docs/restoring_pane_contents.md)
 - [restoring a previously saved environment](docs/restoring_previously_saved_environment.md)
 
 Requirements / dependencies: `tmux 1.9` or higher, `bash`.
 
 Tested and working on Linux, OSX and Cygwin.
 
-`tmux-resurrect` is idempotent! It will not try to restore panes or windows that
+`tmux-persist` is idempotent! It will not try to restore panes or windows that
 already exist.<br/>
 The single exception to this is when tmux is started with only 1 pane in order
 to restore previous tmux env. Only in this case will this single pane be
@@ -65,7 +70,7 @@ overwritten.
 
 Add plugin to the list of TPM plugins in `.tmux.conf`:
 
-    set -g @plugin 'tmux-plugins/tmux-resurrect'
+    set -g @plugin 'tmux-plugins/tmux-persist'
 
 Hit `prefix + I` to fetch the plugin and source it. You should now be able to
 use the plugin.
@@ -74,11 +79,11 @@ use the plugin.
 
 Clone the repo:
 
-    $ git clone https://github.com/tmux-plugins/tmux-resurrect ~/clone/path
+    $ git clone https://github.com/tmux-plugins/tmux-persist ~/clone/path
 
 Add this line to the bottom of `.tmux.conf`:
 
-    run-shell ~/clone/path/resurrect.tmux
+    run-shell ~/clone/path/persist.tmux
 
 Reload TMUX environment with: `$ tmux source-file ~/.tmux.conf`.
 You should now be able to use the plugin.
@@ -95,14 +100,15 @@ You should now be able to use the plugin.
   `vi vim nvim emacs man less more tail top htop irssi weechat mutt`.<br/>
   [Restoring programs doc](docs/restoring_programs.md) explains how to restore
   additional programs.
-- [Change a directory](docs/save_dir.md) where `tmux-resurrect` saves tmux
+- [Change a directory](docs/save_dir.md) where `tmux-persist` saves tmux
   environment.
 
 **Optional features**
 
 - [Restoring vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)
   is nice if you're a vim/neovim user.
-- [Restoring pane contents](docs/restoring_pane_contents.md) feature.
+- [Restoring pane contents](docs/restoring_pane_contents.md) is enabled by
+  default; this doc explains how to tune or disable it.
 
 ### Other goodies
 

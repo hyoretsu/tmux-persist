@@ -54,12 +54,12 @@ proc run_shell_command {command} {
   sleep 1
 }
 
-proc start_resurrect_save {} {
+proc start_persist_save {} {
   send ""
   sleep 5
 }
 
-proc start_resurrect_restore {} {
+proc start_persist_restore {} {
   send ""
   sleep 10
 }

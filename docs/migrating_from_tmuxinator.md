@@ -1,41 +1,41 @@
 # Migrating from `tmuxinator`
 
-### Why migrate to `tmux-resurrect`?
+### Why migrate to `tmux-persist`?
 
 Here are some reasons why you'd want to migrate from `tmuxinator` to
-`tmux-resurrect`:
+`tmux-persist`:
 
 - **Less dependencies**<br/>
   `tmuxinator` depends on `ruby` which can be a hassle to set up if you're not a
   rubyist.<br/>
-  `tmux-resurrect` depends just on `bash` which is virtually
+  `tmux-persist` depends just on `bash` which is virtually
   omnipresent.
 
 - **Simplicity**<br/>
   `tmuxinator` has an executable, CLI interface with half dozen commands and
   command completion.<br/>
-  `tmux-resurrect` defines just 2 tmux key bindings.
+  `tmux-persist` defines just 2 tmux key bindings.
 
 - **No configuration**<br/>
   `tmuxinator` is all about config files (and their constant updating).<br/>
-  `tmux-resurrect` requires no configuration to work.
+  `tmux-persist` requires no configuration to work.
 
 - **Better change handling**<br/>
   When you make a change to any aspect of tmux layout, you also have to
   update related `tmuxinator` project file (and test to make sure change is
   ok).<br/>
-  With `tmux-resurrect` there's nothing to do: your change will be
+  With `tmux-persist` there's nothing to do: your change will be
   remembered on the next save.
 
 ### How to migrate?
 
-1. Install `tmux-resurrect`.
+1. Install `tmux-persist`.
 2. Open \*all* existing `tmuxinator` projects.<br/>
    Verify all projects are open by pressing `prefix + s` and checking they are
    all on the list.
-3. Perform a `tmux-resurrect` save.
+3. Perform a `tmux-persist` save.
 
-That's it! You can continue using just `tmux-resurrect` should you choose so.
+That's it! You can continue using just `tmux-persist` should you choose so.
 
 Note: it probably makes no sense to use both tools at the same time as they do
 the same thing (creating tmux environment for you to work in).
@@ -44,10 +44,10 @@ Technically however, there should be no issues.
 ### Usage differences
 
 `tmuxinator` focuses on managing individual tmux sessions (projects).
-`tmux-resurrect` keeps track of the \*whole* tmux environment: all sessions are
+`tmux-persist` keeps track of the \*whole* tmux environment: all sessions are
 saved and restored together.
 
-A couple tips if you decide to switch to `tmux-resurrect`:
+A couple tips if you decide to switch to `tmux-persist`:
 
 - Keep all tmux sessions (projects) running all the time.<br/>
   If you want to work on an existing project, you should be able to just
@@ -60,7 +60,7 @@ A couple tips if you decide to switch to `tmux-resurrect`:
   It's the recurring theme by now: just keep all the sessions running all the
   time. This is convenient and also cheap in terms of resources.
 
-- The only 2 situations when you need `tmux-resurrect`:<br/>
+- The only 2 situations when you need `tmux-persist`:<br/>
   1) Save tmux environment just before restarting/shutting down your
   computer.<br/>
   2) Restore tmux env after you turn the computer on.
@@ -68,5 +68,5 @@ A couple tips if you decide to switch to `tmux-resurrect`:
 ### Other questions?
 
 Still have questions? Feel free to open an
-[issue](ihttps://github.com/tmux-plugins/tmux-resurrect/issues). We'll try to
+[issue](ihttps://github.com/tmux-plugins/tmux-persist/issues). We'll try to
 answer it and also update this doc.

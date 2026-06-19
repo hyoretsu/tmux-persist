@@ -3,13 +3,13 @@
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 source $CURRENT_DIR/helpers/helpers.sh
-source $CURRENT_DIR/helpers/resurrect_helpers.sh
+source $CURRENT_DIR/helpers/persist_helpers.sh
 
 setup_before_restore() {
 	# setup restore file
-	mkdir -p ~/.tmux/resurrect/
-	cp tests/fixtures/restore_file.txt "${HOME}/.tmux/resurrect/restore_file.txt"
-	ln -sf restore_file.txt "${HOME}/.tmux/resurrect/last"
+	mkdir -p ~/.tmux/persist/
+	cp tests/fixtures/restore_file.txt "${HOME}/.tmux/persist/restore_file.txt"
+	ln -sf restore_file.txt "${HOME}/.tmux/persist/last"
 
 	# directory used in restored tmux session
 	mkdir -p /tmp/bar

@@ -8,11 +8,11 @@ spawn tmux
 # delay with sleep to compensate for tmux starting time
 sleep 1
 
-start_resurrect_restore
+start_persist_restore
 
-# delete all existing resurrect save files
-run_shell_command "rm ~/.tmux/resurrect/*"
+# delete all existing persist save files
+run_shell_command "rm ~/.tmux/persist/*"
 
-start_resurrect_save
+start_persist_save
 
 run_shell_command "tmux kill-server"

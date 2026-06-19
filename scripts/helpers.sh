@@ -1,15 +1,15 @@
-if [ -d "$HOME/.tmux/resurrect" ]; then
-        default_resurrect_dir="$HOME/.tmux/resurrect"
+if [ -d "$HOME/.tmux/persist" ]; then
+        default_persist_dir="$HOME/.tmux/persist"
 else
-        default_resurrect_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/resurrect
+        default_persist_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/persist
 fi
-resurrect_dir_option="@resurrect-dir"
+persist_dir_option="@persist-dir"
 
 SUPPORTED_VERSION="1.9"
-RESURRECT_FILE_PREFIX="tmux_resurrect"
-RESURRECT_FILE_EXTENSION="txt"
-_RESURRECT_DIR=""
-_RESURRECT_FILE_PATH=""
+PERSIST_FILE_PREFIX="tmux_persist"
+PERSIST_FILE_EXTENSION="txt"
+_PERSIST_DIR=""
+_PERSIST_FILE_PATH=""
 
 d=$'\t'
 
@@ -60,7 +60,7 @@ remove_first_char() {
 }
 
 capture_pane_contents_option_on() {
-	local option="$(get_tmux_option "$pane_contents_option" "off")"
+	local option="$(get_tmux_option "$pane_contents_option" "$default_pane_contents")"
 	[ "$option" == "on" ]
 }
 
@@ -81,7 +81,7 @@ is_session_grouped() {
 # pane content file helpers
 
 pane_contents_create_archive() {
-	tar cf - -C "$(resurrect_dir)/save/" ./pane_contents/ |
+	tar cf - -C "$(persist_dir)/save/" ./pane_contents/ |
 		gzip > "$(pane_contents_archive_file)"
 }
 
@@ -90,39 +90,39 @@ pane_content_files_restore_from_archive() {
 	if [ -f "$archive_file" ]; then
 		mkdir -p "$(pane_contents_dir "restore")"
 		gzip -d < "$archive_file" |
-			tar xf - -C "$(resurrect_dir)/restore/"
+			tar xf - -C "$(persist_dir)/restore/"
 	fi
 }
 
 # path helpers
 
-resurrect_dir() {
-	if [ -z "$_RESURRECT_DIR" ]; then
-		local path="$(get_tmux_option "$resurrect_dir_option" "$default_resurrect_dir")"
-		# expands tilde, $HOME and $HOSTNAME if used in @resurrect-dir
+persist_dir() {
+	if [ -z "$_PERSIST_DIR" ]; then
+		local path="$(get_tmux_option "$persist_dir_option" "$default_persist_dir")"
+		# expands tilde, $HOME and $HOSTNAME if used in @persist-dir
 		echo "$path" | sed "s,\$HOME,$HOME,g; s,\$HOSTNAME,$(hostname),g; s,\~,$HOME,g"
 	else
-		echo "$_RESURRECT_DIR"
+		echo "$_PERSIST_DIR"
 	fi
 }
-_RESURRECT_DIR="$(resurrect_dir)"
+_PERSIST_DIR="$(persist_dir)"
 
-resurrect_file_path() {
-	if [ -z "$_RESURRECT_FILE_PATH" ]; then
+persist_file_path() {
+	if [ -z "$_PERSIST_FILE_PATH" ]; then
 		local timestamp="$(date +"%Y%m%dT%H%M%S")"
-		echo "$(resurrect_dir)/${RESURRECT_FILE_PREFIX}_${timestamp}.${RESURRECT_FILE_EXTENSION}"
+		echo "$(persist_dir)/${PERSIST_FILE_PREFIX}_${timestamp}.${PERSIST_FILE_EXTENSION}"
 	else
-		echo "$_RESURRECT_FILE_PATH"
+		echo "$_PERSIST_FILE_PATH"
 	fi
 }
-_RESURRECT_FILE_PATH="$(resurrect_file_path)"
+_PERSIST_FILE_PATH="$(persist_file_path)"
 
-last_resurrect_file() {
-	echo "$(resurrect_dir)/last"
+last_persist_file() {
+	echo "$(persist_dir)/last"
 }
 
 pane_contents_dir() {
-	echo "$(resurrect_dir)/$1/pane_contents/"
+	echo "$(persist_dir)/$1/pane_contents/"
 }
 
 pane_contents_file() {
@@ -137,7 +137,7 @@ pane_contents_file_exists() {
 }
 
 pane_contents_archive_file() {
-	echo "$(resurrect_dir)/pane_contents.tar.gz"
+	echo "$(persist_dir)/pane_contents.tar.gz"
 }
 
 execute_hook() {

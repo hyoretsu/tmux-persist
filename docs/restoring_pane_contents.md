@@ -1,10 +1,15 @@
 # Restoring pane contents
 
-This plugin enables saving and restoring tmux pane contents.
+This plugin saves and restores tmux pane contents (the visual command
+history of each pane).
 
-This feature can be enabled by adding this line to `.tmux.conf`:
+**This feature is enabled by default.** Each pane's contents are saved to
+its own file, keyed by session name, so every session's panes are restored
+with their own content — no cross-session mixups.
 
-    set -g @resurrect-capture-pane-contents 'on'
+To disable it, add this line to `.tmux.conf`:
+
+    set -g @persist-capture-pane-contents 'off'
 
 ##### Known issue
 
@@ -24,7 +29,7 @@ Example:
 
         set -g default-command "reattach-to-user-namespace -l $SHELL"
 
-Related [bug](https://github.com/tmux-plugins/tmux-resurrect/issues/98).
+Related [bug](https://github.com/tmux-plugins/tmux-persist/issues/98).
 
 Alternatively, you can let
 [tmux-sensible](https://github.com/tmux-plugins/tmux-sensible)

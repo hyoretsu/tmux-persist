@@ -1,5 +1,14 @@
 # Changelog
 
+### tmux-persist fork
+- Renamed the project to `tmux-persist`; tmux options are now `@persist-*` and
+  the default save directory is `~/.tmux/persist` (or
+  `$XDG_DATA_HOME/tmux/persist`).
+- Pane-contents capture is now **enabled by default** (set
+  `@persist-capture-pane-contents 'off'` to disable). Contents are saved to a
+  per-pane file keyed by session name, so every session is saved and restored
+  separately.
+
 ### master
 - Remove deprecated "restoring shell history" feature.
 
@@ -11,12 +20,12 @@
 ### v3.0.0, 2021-08-30
 - save and restore tmux pane contents (@laomaiweng)
 - update tmux-test to solve issue with recursing git submodules in that project
-- set options quietly in `resurrect.tmux` script
+- set options quietly in `persist.tmux` script
 - improve pane contents restoration: `cat <file>` is no longer shown in pane
   content history
 - refactoring: drop dependency on `paste` command
 - bugfix for pane contents restoration
-- expand tilde char `~` if used with `@resurrect-dir`
+- expand tilde char `~` if used with `@persist-dir`
 - do not save empty trailing lines when pane content is saved
 - do not save pane contents if pane is empty (only for 'save pane contents'
   feature)
@@ -26,10 +35,10 @@
 - `mutt` added to the list of automatically restored programs
 - added guide for migrating from tmuxinator
 - fixed a bug for restoring commands on tmux 2.5 (and probably tmux 2.4)
-- do not create another resurrect file if there are no changes (credit @vburdo)
-- allow using '$HOSTNAME' in @resurrect-dir
+- do not create another persist file if there are no changes (credit @vburdo)
+- allow using '$HOSTNAME' in @persist-dir
 - add zsh history saving and restoring
-- delete resurrect files older than 30 days, but keep at least 5 files
+- delete persist files older than 30 days, but keep at least 5 files
 - add save and restore hooks
 - always use `-ao` flags for `ps` command to detect commands
 - Deprecate restoring shell history feature.
@@ -38,13 +47,13 @@
   e.g. `vim -S Session1.vim`.
 - Enable restoring command arguments for inline strategies with `*` character.
 - Kill session "0" if it wasn't restored.
-- Add `@resurrect-delete-backup-after` option to specify how many days of
+- Add `@persist-delete-backup-after` option to specify how many days of
   backups to keep - default is 30.
 
 ### v2.4.0, 2015-02-23
 - add "tmux-test"
-- add test for "resurrect save" feature
-- add test for "resurrect restore" feature
+- add test for "persist save" feature
+- add test for "persist restore" feature
 - make the tests work and pass on travis
 - add travis badge to the readme
 
@@ -55,9 +64,9 @@
 
 ### v2.2.0, 2015-02-12
 - bugfix: zoomed windows related regression
-- export save and restore script paths so that 'tmux-resurrect-save' plugin can
+- export save and restore script paths so that 'tmux-persist-save' plugin can
   use them
-- enable "quiet" saving (used by 'tmux-resurrect-save' plugin)
+- enable "quiet" saving (used by 'tmux-persist-save' plugin)
 
 ### v2.1.0, 2015-02-12
 - if restore is started when there's only **1 pane in the whole tmux server**,
@@ -110,7 +119,7 @@
 - make default program running list even more conservative
 
 ### v0.4.0, 2014-08-29
-- change plugin name to `tmux-resurrect`. Change all the variable names.
+- change plugin name to `tmux-persist`. Change all the variable names.
 
 ### v0.3.0, 2014-08-29
 - bugfix: when top is running the pane `$PWD` can't be saved. This was causing

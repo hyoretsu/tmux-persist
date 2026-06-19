@@ -37,6 +37,6 @@ new_tmux_window
 new_tmux_session "yellow"
 run_shell_command "cd /tmp/bar"
 
-start_resurrect_save
+start_persist_save
 
 run_shell_command "tmux kill-server"

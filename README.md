@@ -29,16 +29,18 @@ Automatic restoring and continuous saving of tmux env is also possible with
 
 ### Key bindings
 
-- `prefix + Ctrl-s` - save every session (each to its own files)
+- `prefix + Ctrl-s` - save the session you are currently attached to
 - `prefix + Ctrl-r` - restore the session you are currently attached to
 
-Each session is saved separately, so `restore` only ever touches the session
-you are in — it never recreates or switches you to other sessions. To restore a
-specific session by name, run `scripts/restore.sh <session-name>`.
+Each session is saved separately to its own files, so save and restore only
+ever touch the session you are in — restore never recreates or switches you to
+other sessions. To save/restore a specific session by name, run
+`scripts/save.sh <session-name>` / `scripts/restore.sh <session-name>`.
 
-Sessions are also **saved automatically** when a client detaches or a session
-closes (detaching, disconnecting, or `Ctrl-d` out of a session). Disable with
-`set -g @persist-save-on-exit 'off'`.
+Saving and restoring also happen **automatically**: sessions are saved on
+detach, disconnect and exit, and restored when a session is (re)created. See
+[automatic saving and restoring](docs/auto_save_and_restore.md). Disable with
+`@persist-save-on-exit 'off'` / `@persist-auto-restore 'off'`.
 
 ### About
 
@@ -109,7 +111,10 @@ You should now be able to use the plugin.
   [Restoring programs doc](docs/restoring_programs.md) explains how to restore
   additional programs.
 - [Change a directory](docs/save_dir.md) where `tmux-persist` saves tmux
-  environment.
+  environment (`@persist-dir`).
+- [Automatic saving and restoring](docs/auto_save_and_restore.md) on detach,
+  disconnect, exit and session creation (`@persist-save-on-exit`,
+  `@persist-auto-restore`).
 
 **Optional features**
 

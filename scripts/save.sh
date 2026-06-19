@@ -10,8 +10,21 @@ source "$CURRENT_DIR/spinner_helpers.sh"
 d=$'\t'
 delimiter=$'\t'
 
-# if "quiet" script produces no output
-SCRIPT_OUTPUT="$1"
+# Arguments (any order):
+#   quiet         - produce no output (used by hooks)
+#   <session>     - save this session instead of the current one
+# Without a session argument the session the client is attached to is saved.
+SCRIPT_OUTPUT=""
+SAVE_SESSION=""
+for arg in "$@"; do
+	case "$arg" in
+		quiet) SCRIPT_OUTPUT="quiet" ;;
+		*) SAVE_SESSION="$arg" ;;
+	esac
+done
+if [ -z "$SAVE_SESSION" ]; then
+	SAVE_SESSION="$(tmux display-message -p "#{client_session}")"
+fi
 
 grouped_sessions_format() {
 	local format
@@ -258,20 +271,18 @@ save_session() {
 }
 
 save_all() {
+	# Nothing to save (e.g. invoked with no attached client and no session arg).
+	[ -n "$SAVE_SESSION" ] || return
 	mkdir -p "$(persist_dir)"
-	# Compute grouped-session info once. It is needed so that panes/windows
-	# belonging to grouped sessions are skipped (they share the original
-	# session's layout). Both are exported so the save_session subshell (run
-	# from the pipe below) can read them.
+	# Compute grouped-session info. It is needed so that panes/windows belonging
+	# to a grouped session are skipped (they share the original session's
+	# layout). Both are exported so save_session and its subshells can read them.
 	export GROUPED_SESSIONS_DUMP="$(dump_grouped_sessions)"
 	get_grouped_sessions "$GROUPED_SESSIONS_DUMP"
 	export CAPTURE_PANE_CONTENTS="off"
 	capture_pane_contents_option_on && export CAPTURE_PANE_CONTENTS="on"
 
-	tmux list-sessions -F "#{session_name}" |
-		while IFS= read -r session; do
-			save_session "$session"
-		done
+	save_session "$SAVE_SESSION"
 
 	execute_hook "post-save-all"
 }

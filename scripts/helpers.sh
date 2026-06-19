@@ -6,10 +6,8 @@ fi
 persist_dir_option="@persist-dir"
 
 SUPPORTED_VERSION="1.9"
-PERSIST_FILE_PREFIX="tmux_persist"
 PERSIST_FILE_EXTENSION="txt"
 _PERSIST_DIR=""
-_PERSIST_FILE_PATH=""
 
 d=$'\t'
 
@@ -81,12 +79,14 @@ is_session_grouped() {
 # pane content file helpers
 
 pane_contents_create_archive() {
+	local session="$1"
 	tar cf - -C "$(persist_dir)/save/" ./pane_contents/ |
-		gzip > "$(pane_contents_archive_file)"
+		gzip > "$(pane_contents_archive_file "$session")"
 }
 
 pane_content_files_restore_from_archive() {
-	local archive_file="$(pane_contents_archive_file)"
+	local session="$1"
+	local archive_file="$(pane_contents_archive_file "$session")"
 	if [ -f "$archive_file" ]; then
 		mkdir -p "$(pane_contents_dir "restore")"
 		gzip -d < "$archive_file" |
@@ -107,18 +107,21 @@ persist_dir() {
 }
 _PERSIST_DIR="$(persist_dir)"
 
-persist_file_path() {
-	if [ -z "$_PERSIST_FILE_PATH" ]; then
-		local timestamp="$(date +"%Y%m%dT%H%M%S")"
-		echo "$(persist_dir)/${PERSIST_FILE_PREFIX}_${timestamp}.${PERSIST_FILE_EXTENSION}"
-	else
-		echo "$_PERSIST_FILE_PATH"
-	fi
-}
-_PERSIST_FILE_PATH="$(persist_file_path)"
+# A single timestamp shared by every session saved in one save run.
+_PERSIST_TIMESTAMP="$(date +"%Y%m%dT%H%M%S")"
 
-last_persist_file() {
-	echo "$(persist_dir)/last"
+# Per-session layout snapshot, e.g. "<persist-dir>/cubari_20260619T182833.txt".
+# The session name is the file's prefix so each session is stored separately.
+session_file_path() {
+	local session="$1"
+	echo "$(persist_dir)/${session}_${_PERSIST_TIMESTAMP}.${PERSIST_FILE_EXTENSION}"
+}
+
+# Symlink pointing at the latest snapshot for a session, e.g.
+# "<persist-dir>/cubari_last".
+last_session_file() {
+	local session="$1"
+	echo "$(persist_dir)/${session}_last"
 }
 
 pane_contents_dir() {
@@ -136,8 +139,10 @@ pane_contents_file_exists() {
 	[ -f "$(pane_contents_file "restore" "$pane_id")" ]
 }
 
+# Per-session pane-contents archive, e.g. "<persist-dir>/cubari_pane_contents.tar.gz".
 pane_contents_archive_file() {
-	echo "$(persist_dir)/pane_contents.tar.gz"
+	local session="$1"
+	echo "$(persist_dir)/${session}_pane_contents.tar.gz"
 }
 
 execute_hook() {

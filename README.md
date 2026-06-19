@@ -29,8 +29,12 @@ Automatic restoring and continuous saving of tmux env is also possible with
 
 ### Key bindings
 
-- `prefix + Ctrl-s` - save
-- `prefix + Ctrl-r` - restore
+- `prefix + Ctrl-s` - save every session (each to its own files)
+- `prefix + Ctrl-r` - restore the session you are currently attached to
+
+Each session is saved separately, so `restore` only ever touches the session
+you are in — it never recreates or switches you to other sessions. To restore a
+specific session by name, run `scripts/restore.sh <session-name>`.
 
 ### About
 
@@ -62,8 +66,8 @@ Tested and working on Linux, OSX and Cygwin.
 
 `tmux-persist` is idempotent! It will not try to restore panes or windows that
 already exist.<br/>
-The single exception to this is when tmux is started with only 1 pane in order
-to restore previous tmux env. Only in this case will this single pane be
+The single exception to this is when the session being restored has only 1 pane
+(e.g. a freshly created session). Only in this case will that single pane be
 overwritten.
 
 ### Installation with [Tmux Plugin Manager](https://github.com/tmux-plugins/tpm) (recommended)

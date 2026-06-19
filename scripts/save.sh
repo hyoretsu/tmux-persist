@@ -71,22 +71,12 @@ window_format() {
 	echo "$format"
 }
 
-state_format() {
-	local format
-	format+="state"
-	format+="${delimiter}"
-	format+="#{client_session}"
-	format+="${delimiter}"
-	format+="#{client_last_session}"
-	echo "$format"
-}
-
 dump_panes_raw() {
-	tmux list-panes -a -F "$(pane_format)"
+	tmux list-panes -s -t "$1" -F "$(pane_format)"
 }
 
 dump_windows_raw(){
-	tmux list-windows -a -F "$(window_format)"
+	tmux list-windows -t "$1" -F "$(window_format)"
 }
 
 toggle_window_zoom() {
@@ -177,18 +167,18 @@ dump_grouped_sessions() {
 		done
 }
 
-fetch_and_dump_grouped_sessions(){
-	local grouped_sessions_dump="$(dump_grouped_sessions)"
-	get_grouped_sessions "$grouped_sessions_dump"
-	if [ -n "$grouped_sessions_dump" ]; then
-		echo "$grouped_sessions_dump"
-	fi
+# Emits the single "grouped_session" line for the given session, if it is a
+# grouped (secondary) session. Reads the pre-computed dump from the environment.
+dump_grouped_session_line() {
+	local session="$1"
+	echo "$GROUPED_SESSIONS_DUMP" |
+		awk -v s="$session" 'BEGIN { FS="\t" } $1 == "grouped_session" && $2 == s'
 }
 
 # translates pane pid to process command running inside a pane
 dump_panes() {
 	local full_command
-	dump_panes_raw |
+	dump_panes_raw "$1" |
 		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
 			# not saving panes from grouped sessions
 			if is_session_grouped "$session_name"; then
@@ -201,7 +191,7 @@ dump_panes() {
 }
 
 dump_windows() {
-	dump_windows_raw |
+	dump_windows_raw "$1" |
 		while IFS=$d read line_type session_name window_index window_name window_active window_flags window_layout; do
 			# not saving windows from grouped sessions
 			if is_session_grouped "$session_name"; then
@@ -214,48 +204,75 @@ dump_windows() {
 		done
 }
 
-dump_state() {
-	tmux display-message -p "$(state_format)"
-}
-
 dump_pane_contents() {
 	local pane_contents_area="$(get_tmux_option "$pane_contents_area_option" "$default_pane_contents_area")"
-	dump_panes_raw |
+	dump_panes_raw "$1" |
 		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
 			capture_pane_contents "${session_name}:${window_number}.${pane_index}" "$history_size" "$pane_contents_area"
 		done
 }
 
+# remove a session's persist files older than 30 days (default), but keep at
+# least 5 copies of backup.
 remove_old_backups() {
-	# remove persist files older than 30 days (default), but keep at least 5 copies of backup.
+	local session="$1"
 	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
 	local -a files
-	files=($(ls -t $(persist_dir)/${PERSIST_FILE_PREFIX}_*.${PERSIST_FILE_EXTENSION} | tail -n +6))
+	files=($(ls -t "$(persist_dir)/${session}_"*".${PERSIST_FILE_EXTENSION}" 2>/dev/null | tail -n +6))
 	[[ ${#files[@]} -eq 0 ]] ||
 		find "${files[@]}" -type f -mtime "+${delete_after}" -exec rm -v "{}" \; > /dev/null
 }
 
-save_all() {
-	local persist_file_path="$(persist_file_path)"
-	local last_persist_file="$(last_persist_file)"
-	mkdir -p "$(persist_dir)"
-	fetch_and_dump_grouped_sessions > "$persist_file_path"
-	dump_panes   >> "$persist_file_path"
-	dump_windows >> "$persist_file_path"
-	dump_state   >> "$persist_file_path"
-	execute_hook "post-save-layout" "$persist_file_path"
-	if files_differ "$persist_file_path" "$last_persist_file"; then
-		ln -fs "$(basename "$persist_file_path")" "$last_persist_file"
+# Saves a single session to its own files, named "<session>_*".
+save_session() {
+	local session="$1"
+	local session_file_path="$(session_file_path "$session")"
+	local last_session_file="$(last_session_file "$session")"
+
+	if is_session_grouped "$session"; then
+		# grouped sessions share the original session's layout, so we only
+		# record the grouping itself - never panes, windows or pane contents.
+		dump_grouped_session_line "$session" > "$session_file_path"
 	else
-		rm "$persist_file_path"
+		{
+			dump_panes   "$session"
+			dump_windows "$session"
+		} > "$session_file_path"
 	fi
-	if capture_pane_contents_option_on; then
+
+	execute_hook "post-save-layout" "$session_file_path"
+	if files_differ "$session_file_path" "$last_session_file"; then
+		ln -fs "$(basename "$session_file_path")" "$last_session_file"
+	else
+		rm "$session_file_path"
+	fi
+
+	if [ "$CAPTURE_PANE_CONTENTS" = "on" ] && ! is_session_grouped "$session"; then
 		mkdir -p "$(pane_contents_dir "save")"
-		dump_pane_contents
-		pane_contents_create_archive
-		rm "$(pane_contents_dir "save")"/*
+		dump_pane_contents "$session"
+		pane_contents_create_archive "$session"
+		rm -f "$(pane_contents_dir "save")"/*
 	fi
-	remove_old_backups
+
+	remove_old_backups "$session"
+}
+
+save_all() {
+	mkdir -p "$(persist_dir)"
+	# Compute grouped-session info once. It is needed so that panes/windows
+	# belonging to grouped sessions are skipped (they share the original
+	# session's layout). Both are exported so the save_session subshell (run
+	# from the pipe below) can read them.
+	export GROUPED_SESSIONS_DUMP="$(dump_grouped_sessions)"
+	get_grouped_sessions "$GROUPED_SESSIONS_DUMP"
+	export CAPTURE_PANE_CONTENTS="off"
+	capture_pane_contents_option_on && export CAPTURE_PANE_CONTENTS="on"
+
+	tmux list-sessions -F "#{session_name}" |
+		while IFS= read -r session; do
+			save_session "$session"
+		done
+
 	execute_hook "post-save-all"
 }
 

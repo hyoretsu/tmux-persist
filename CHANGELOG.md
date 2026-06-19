@@ -5,9 +5,14 @@
   the default save directory is `~/.tmux/persist` (or
   `$XDG_DATA_HOME/tmux/persist`).
 - Pane-contents capture is now **enabled by default** (set
-  `@persist-capture-pane-contents 'off'` to disable). Contents are saved to a
-  per-pane file keyed by session name, so every session is saved and restored
-  separately.
+  `@persist-capture-pane-contents 'off'` to disable).
+- **Per-session save and restore.** Each session is now saved to its own files
+  named `<session>_*` (`<session>_<timestamp>.txt`, `<session>_last`,
+  `<session>_pane_contents.tar.gz`) instead of one shared `last` /
+  `tmux_resurrect_*.txt` / `pane_contents.tar.gz`. Restore acts on the session
+  you are attached to (or a session name passed to `restore.sh`) and no longer
+  recreates or switches to other sessions — fixing the bug where restoring one
+  session pulled in another's panes/contents.
 
 ### master
 - Remove deprecated "restoring shell history" feature.

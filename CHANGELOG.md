@@ -6,6 +6,9 @@
   `$XDG_DATA_HOME/tmux/persist`).
 - Pane-contents capture is now **enabled by default** (set
   `@persist-capture-pane-contents 'off'` to disable).
+- **Auto-save on exit.** Sessions are saved automatically on the
+  `client-detached` and `session-closed` tmux hooks (covers detaching,
+  disconnecting and exiting). Disable with `@persist-save-on-exit 'off'`.
 - **Per-session save and restore.** Each session is now saved to its own files
   named `<session>_*` (`<session>_<timestamp>.txt`, `<session>_last`,
   `<session>_pane_contents.tar.gz`) instead of one shared `last` /

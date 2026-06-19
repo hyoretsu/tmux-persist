@@ -36,6 +36,10 @@ Each session is saved separately, so `restore` only ever touches the session
 you are in — it never recreates or switches you to other sessions. To restore a
 specific session by name, run `scripts/restore.sh <session-name>`.
 
+Sessions are also **saved automatically** when a client detaches or a session
+closes (detaching, disconnecting, or `Ctrl-d` out of a session). Disable with
+`set -g @persist-save-on-exit 'off'`.
+
 ### About
 
 This plugin goes to great lengths to save and restore all the details from your

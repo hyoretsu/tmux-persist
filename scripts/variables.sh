@@ -51,3 +51,9 @@ hook_prefix="@persist-hook-"
 
 delete_backup_after_option="@persist-delete-backup-after"
 default_delete_backup_after="30" # days
+
+# Automatically save when a client detaches or a session is closed. This covers
+# detaching (prefix + d), disconnecting (terminal closed) and exiting a session
+# (Ctrl-d out of the last pane). Set to 'off' to disable.
+save_on_exit_option="@persist-save-on-exit"
+default_save_on_exit="on"

@@ -31,10 +31,23 @@ set_script_path_options() {
 	tmux set-option -gq "$restore_path_option" "$CURRENT_DIR/scripts/restore.sh"
 }
 
+set_save_on_exit_hooks() {
+	local enabled="$(get_tmux_option "$save_on_exit_option" "$default_save_on_exit")"
+	[ "$enabled" = "on" ] || return
+	local save_command="run-shell \"$CURRENT_DIR/scripts/save.sh quiet\""
+	# Replace (not append) so re-sourcing the config does not stack duplicate
+	# hooks. '2>/dev/null' keeps older tmux versions (without these hooks) quiet.
+	local hook
+	for hook in client-detached session-closed; do
+		tmux set-hook -g "$hook" "$save_command" 2>/dev/null
+	done
+}
+
 main() {
 	set_save_bindings
 	set_restore_bindings
 	set_default_strategies
 	set_script_path_options
+	set_save_on_exit_hooks
 }
 main

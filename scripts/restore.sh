@@ -20,11 +20,24 @@ RESTORING_FROM_SCRATCH="false"
 
 RESTORE_PANE_CONTENTS="false"
 
-# The session being restored. Defaults to the session the client is currently
-# attached to, but can be overridden by passing a session name as the first
-# argument to this script. Each session is saved separately (files named
-# "<session>_*"), so restore only ever touches this one session.
-RESTORE_SESSION="${1:-$(tmux display-message -p "#{client_session}")}"
+# Arguments (any order):
+#   quiet      - produce no output and no "file not found" message (used by the
+#                auto-restore hook, which fires for every new session)
+#   <session>  - restore this session instead of the current one
+# Each session is saved separately (files named "<session>_*"), so restore only
+# ever touches this one session. Without a session argument the session the
+# client is attached to is restored.
+RESTORE_SESSION=""
+RESTORE_QUIET="false"
+for arg in "$@"; do
+	case "$arg" in
+		quiet) RESTORE_QUIET="true" ;;
+		*) RESTORE_SESSION="$arg" ;;
+	esac
+done
+if [ -z "$RESTORE_SESSION" ]; then
+	RESTORE_SESSION="$(tmux display-message -p "#{client_session}")"
+fi
 
 is_line_type() {
 	local line_type="$1"
@@ -35,8 +48,10 @@ is_line_type() {
 
 check_saved_session_exists() {
 	local persist_file="$(last_session_file "$RESTORE_SESSION")"
-	if [ ! -f $persist_file ]; then
-		display_message "Tmux persist file not found!"
+	if [ ! -f "$persist_file" ]; then
+		# In quiet mode (auto-restore on session creation) staying silent is
+		# expected: most new sessions have no saved snapshot.
+		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found!"
 		return 1
 	fi
 }
@@ -333,9 +348,13 @@ cleanup_restored_pane_contents() {
 	fi
 }
 
+show_output() {
+	[ "$RESTORE_QUIET" != "true" ]
+}
+
 main() {
 	if supported_tmux_version_ok && check_saved_session_exists; then
-		start_spinner "Restoring..." "Tmux restore complete!"
+		show_output && start_spinner "Restoring..." "Tmux restore complete!"
 		execute_hook "pre-restore-all"
 		restore_all_panes
 		restore_window_properties >/dev/null 2>&1
@@ -348,8 +367,10 @@ main() {
 		restore_active_and_alternate_windows
 		cleanup_restored_pane_contents
 		execute_hook "post-restore-all"
-		stop_spinner
-		display_message "Tmux restore complete!"
+		if show_output; then
+			stop_spinner
+			display_message "Tmux restore complete!"
+		fi
 	fi
 }
 main

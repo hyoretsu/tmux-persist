@@ -43,11 +43,22 @@ set_save_on_exit_hooks() {
 	done
 }
 
+set_auto_restore_hook() {
+	local enabled="$(get_tmux_option "$auto_restore_option" "$default_auto_restore")"
+	[ "$enabled" = "on" ] || return
+	# When a session is created, restore its saved contents (quietly: most new
+	# sessions have no snapshot). '#{hook_session_name}' is the new session's
+	# name. Replace, not append, to stay idempotent across config reloads.
+	tmux set-hook -g session-created \
+		"run-shell \"$CURRENT_DIR/scripts/restore.sh #{hook_session_name} quiet\"" 2>/dev/null
+}
+
 main() {
 	set_save_bindings
 	set_restore_bindings
 	set_default_strategies
 	set_script_path_options
 	set_save_on_exit_hooks
+	set_auto_restore_hook
 }
 main

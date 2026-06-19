@@ -57,3 +57,8 @@ default_delete_backup_after="30" # days
 # (Ctrl-d out of the last pane). Set to 'off' to disable.
 save_on_exit_option="@persist-save-on-exit"
 default_save_on_exit="on"
+
+# Automatically restore a session's saved contents when a session with that name
+# is created. Set to 'off' to disable.
+auto_restore_option="@persist-auto-restore"
+default_auto_restore="on"

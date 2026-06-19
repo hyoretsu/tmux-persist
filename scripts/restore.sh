@@ -133,7 +133,12 @@ tmux_default_command() {
 }
 
 pane_creation_command() {
-	echo "cat '$(pane_contents_file "restore" "${1}:${2}.${3}")'; exec $(tmux_default_command)"
+	# Fall back to a real shell if tmux has no default command/shell configured.
+	# Otherwise the pane would run "cat <file>; exec" with nothing after exec,
+	# exit immediately and the pane (and possibly the session) would close.
+	local shell_command="$(tmux_default_command)"
+	[ -n "$shell_command" ] || shell_command="${SHELL:-/bin/sh}"
+	echo "cat '$(pane_contents_file "restore" "${1}:${2}.${3}")'; exec $shell_command"
 }
 
 new_window() {

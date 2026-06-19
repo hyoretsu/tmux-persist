@@ -1,6 +1,11 @@
 # Changelog
 
 ### tmux-persist fork
+- Snapshot retention is now purely age-based: snapshots older than
+  `@persist-delete-backup-after` days (default **7**, was 30 with a 5-copy
+  floor) are erased automatically on save and on server start. When all of a
+  session's snapshots expire, its `last` pointer and pane-contents archive are
+  removed too. Pruning is collision-safe (`a` never affects `a_b`).
 - Renamed the project to `tmux-persist`; tmux options are now `@persist-*` and
   the default save directory is `~/.tmux/persist` (or
   `$XDG_DATA_HOME/tmux/persist`).

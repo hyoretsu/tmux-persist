@@ -230,17 +230,6 @@ dump_pane_contents() {
 		done
 }
 
-# remove a session's persist files older than 30 days (default), but keep at
-# least 5 copies of backup.
-remove_old_backups() {
-	local session="$1"
-	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
-	local -a files
-	files=($(ls -t "$(persist_dir)/${session}_"*".${PERSIST_FILE_EXTENSION}" 2>/dev/null | tail -n +6))
-	[[ ${#files[@]} -eq 0 ]] ||
-		find "${files[@]}" -type f -mtime "+${delete_after}" -exec rm -v "{}" \; > /dev/null
-}
-
 # Saves a single session to its own files, named "<session>_*".
 save_session() {
 	local session="$1"
@@ -271,8 +260,6 @@ save_session() {
 		pane_contents_create_archive "$session"
 		rm -f "$(pane_contents_dir "save")"/*
 	fi
-
-	remove_old_backups "$session"
 }
 
 save_all() {
@@ -297,6 +284,9 @@ save_all() {
 	else
 		save_session "$SAVE_SESSION"
 	fi
+
+	# Drop snapshots that are now too old, across all sessions.
+	prune_all_old_backups
 
 	execute_hook "post-save-all"
 }

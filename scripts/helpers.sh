@@ -145,6 +145,38 @@ pane_contents_archive_file() {
 	echo "$(persist_dir)/${session}_pane_contents.tar.gz"
 }
 
+# Erase a session's snapshots older than @persist-delete-backup-after days. The
+# timestamp glob is shaped exactly (????????T??????) so a session named "a" is
+# never confused with "a_b". If every snapshot expires the "last" symlink ends
+# up dangling, meaning the whole session is stale - so its pointer and
+# pane-contents archive are dropped too.
+remove_old_backups() {
+	local session="$1"
+	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
+	shopt -s nullglob
+	local snapshot
+	for snapshot in "$(persist_dir)/${session}_"????????T??????".${PERSIST_FILE_EXTENSION}"; do
+		if [ -n "$(find "$snapshot" -mtime "+${delete_after}" -print 2>/dev/null)" ]; then
+			rm -f "$snapshot"
+		fi
+	done
+	local last_link="$(last_session_file "$session")"
+	if [ -L "$last_link" ] && [ ! -e "$last_link" ]; then
+		rm -f "$last_link" "$(pane_contents_archive_file "$session")"
+	fi
+}
+
+# Runs remove_old_backups for every saved session (one "<session>_last" each).
+prune_all_old_backups() {
+	shopt -s nullglob
+	local link session
+	for link in "$(persist_dir)/"*_last; do
+		session="$(basename "$link")"
+		session="${session%_last}"
+		remove_old_backups "$session"
+	done
+}
+
 execute_hook() {
 	local kind="$1"
 	shift

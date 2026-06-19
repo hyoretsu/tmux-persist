@@ -49,8 +49,11 @@ overwrite_option="@persist-never-overwrite"
 # Hooks are set via ${hook_prefix}${name}, i.e. "@persist-hook-post-save-all"
 hook_prefix="@persist-hook-"
 
+# Snapshots older than this many days are erased automatically (on save and on
+# server start). When all of a session's snapshots expire, its "last" pointer
+# and pane-contents archive are removed too.
 delete_backup_after_option="@persist-delete-backup-after"
-default_delete_backup_after="30" # days
+default_delete_backup_after="7" # days
 
 # Automatically save when a client detaches or a session is closed. This covers
 # detaching (prefix + d), disconnecting (terminal closed) and exiting a session

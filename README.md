@@ -115,6 +115,10 @@ You should now be able to use the plugin.
 - [Automatic saving and restoring](docs/auto_save_and_restore.md) on detach,
   disconnect, exit and session creation (`@persist-save-on-exit`,
   `@persist-auto-restore`).
+- Snapshots older than 7 days are erased automatically. Change the window
+  with `set -g @persist-delete-backup-after '<days>'`. When all of a session's
+  snapshots expire, the session is forgotten entirely (its `last` pointer and
+  pane contents go too).
 
 **Optional features**
 

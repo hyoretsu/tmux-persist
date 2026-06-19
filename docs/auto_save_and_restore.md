@@ -13,13 +13,44 @@ Sessions are saved automatically when:
 
 This is wired with the `client-detached` and `session-closed` tmux hooks. On
 detach/disconnect the session is still alive, so its full contents are captured.
-On `Ctrl-d` the session being torn down can no longer be captured, so it keeps
-its most recent snapshot (the auto-save from the previous detach or your last
-manual save).
 
 Disable it with:
 
     set -g @persist-save-on-exit 'off'
+
+### Saving on `Ctrl-d` (shell integration)
+
+`Ctrl-d` is special. It makes the shell exit, which closes the pane and then the
+session. By the time tmux fires `pane-exited` / `session-closed`, the pane is
+already gone — its contents can no longer be captured. So the auto-save hooks
+alone leave a `Ctrl-d`-closed session with only its most recent snapshot (the
+last detach or manual save).
+
+To save *at the moment of* `Ctrl-d`, save from the shell just before it exits,
+while the pane is still alive. This only saves; it does not change what `Ctrl-d`
+does. Add to your shell rc:
+
+zsh (`~/.zshrc`):
+
+    if [ -n "$TMUX" ]; then
+      zshexit() {
+        local script; script="$(tmux show-option -gqv @persist-save-script-path)"
+        [ -n "$script" ] && "$script" quiet "$(tmux display-message -p '#{client_session}')" >/dev/null 2>&1
+      }
+    fi
+
+bash (`~/.bashrc`):
+
+    if [ -n "$TMUX" ]; then
+      _persist_save_on_exit() {
+        local script; script="$(tmux show-option -gqv @persist-save-script-path)"
+        [ -n "$script" ] && "$script" quiet "$(tmux display-message -p '#{client_session}')" >/dev/null 2>&1
+      }
+      trap _persist_save_on_exit EXIT
+    fi
+
+`@persist-save-script-path` is set by the plugin, so you don't have to hardcode
+the path.
 
 ## Auto-restore on session creation
 

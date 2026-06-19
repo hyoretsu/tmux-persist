@@ -12,17 +12,22 @@ delimiter=$'\t'
 
 # Arguments (any order):
 #   quiet         - produce no output (used by hooks)
+#   all           - save every session (used by the auto-save-on-exit hooks,
+#                   which fire without a "current session" to target)
 #   <session>     - save this session instead of the current one
-# Without a session argument the session the client is attached to is saved.
+# Without "all" or a session argument the session the client is attached to is
+# saved.
 SCRIPT_OUTPUT=""
 SAVE_SESSION=""
+SAVE_ALL="false"
 for arg in "$@"; do
 	case "$arg" in
 		quiet) SCRIPT_OUTPUT="quiet" ;;
+		all) SAVE_ALL="true" ;;
 		*) SAVE_SESSION="$arg" ;;
 	esac
 done
-if [ -z "$SAVE_SESSION" ]; then
+if [ "$SAVE_ALL" != "true" ] && [ -z "$SAVE_SESSION" ]; then
 	SAVE_SESSION="$(tmux display-message -p "#{client_session}")"
 fi
 
@@ -272,7 +277,7 @@ save_session() {
 
 save_all() {
 	# Nothing to save (e.g. invoked with no attached client and no session arg).
-	[ -n "$SAVE_SESSION" ] || return
+	[ "$SAVE_ALL" = "true" ] || [ -n "$SAVE_SESSION" ] || return
 	mkdir -p "$(persist_dir)"
 	# Compute grouped-session info. It is needed so that panes/windows belonging
 	# to a grouped session are skipped (they share the original session's
@@ -282,7 +287,16 @@ save_all() {
 	export CAPTURE_PANE_CONTENTS="off"
 	capture_pane_contents_option_on && export CAPTURE_PANE_CONTENTS="on"
 
-	save_session "$SAVE_SESSION"
+	if [ "$SAVE_ALL" = "true" ]; then
+		# Used by the auto-save-on-exit hooks: tmux gives no "current session"
+		# on detach, so save every live session to be safe.
+		tmux list-sessions -F "#{session_name}" 2>/dev/null |
+			while IFS= read -r session; do
+				save_session "$session"
+			done
+	else
+		save_session "$SAVE_SESSION"
+	fi
 
 	execute_hook "post-save-all"
 }

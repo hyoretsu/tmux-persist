@@ -1,0 +1,10 @@
+{
+	"mcpServers": {
+		"serena": {
+			"args": ["start-mcp-server", "--context=copilot-cli", "--project-from-cwd"],
+			"command": "serena",
+			"tools": ["*"],
+			"type": "stdio"
+		}
+	}
+}

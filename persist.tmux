@@ -55,6 +55,23 @@ set_auto_restore_hook() {
 	fi
 }
 
+restore_existing_sessions_once() {
+	if [ "$(get_tmux_option "$auto_restore_option" "$default_auto_restore")" = "on" ]; then
+		# The session that starts the server is created before this plugin (loaded
+		# via an async run-shell) can install the session-created hook, so it never
+		# gets auto-restored. Restore already-existing sessions once per server
+		# start. A marker option prevents re-running on every config reload, which
+		# would clobber live sessions.
+		if [ "$(get_tmux_option "$initialized_option" "")" != "1" ]; then
+			tmux set-option -g "$initialized_option" 1
+			tmux list-sessions -F "#{session_name}" 2>/dev/null |
+				while IFS= read -r session; do
+					"$CURRENT_DIR/scripts/restore.sh" "$session" quiet
+				done
+		fi
+	fi
+}
+
 main() {
 	set_save_bindings
 	set_restore_bindings
@@ -62,6 +79,7 @@ main() {
 	set_script_path_options
 	set_save_on_exit_hooks
 	set_auto_restore_hook
+	restore_existing_sessions_once
 	return 0
 }
 main

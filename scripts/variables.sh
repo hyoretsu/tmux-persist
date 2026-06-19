@@ -62,3 +62,7 @@ default_save_on_exit="on"
 # is created. Set to 'off' to disable.
 auto_restore_option="@persist-auto-restore"
 default_auto_restore="on"
+
+# Internal marker (set per server) so the one-time restore of sessions that
+# already exist when the plugin loads runs only once, not on every reload.
+initialized_option="@persist-initialized"

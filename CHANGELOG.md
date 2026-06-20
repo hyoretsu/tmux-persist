@@ -38,9 +38,6 @@
   recreates or switches to other sessions — fixing the bug where restoring one
   session pulled in another's panes/contents.
 
-### master
-- Remove deprecated "restoring shell history" feature.
-
 ### v4.0.0, 2022-04-10
 - Proper handling of `automatic-rename` window option.
 - save and restore tmux pane title (breaking change: you have to re-save to be

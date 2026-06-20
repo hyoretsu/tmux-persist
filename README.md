@@ -1,5 +1,7 @@
 # Tmux Persist
 
+[![tests](https://github.com/hyoretsu/tmux-persist/actions/workflows/tests.yml/badge.svg)](https://github.com/hyoretsu/tmux-persist/actions/workflows/tests.yml)
+
 Restore `tmux` environment after system restart.
 
 > `tmux-persist` is a maintained fork of the (abandoned)
@@ -80,7 +82,7 @@ overwritten.
 
 Add plugin to the list of TPM plugins in `.tmux.conf`:
 
-    set -g @plugin 'tmux-plugins/tmux-persist'
+    set -g @plugin 'hyoretsu/tmux-persist'
 
 Hit `prefix + I` to fetch the plugin and source it. You should now be able to
 use the plugin.
@@ -89,7 +91,7 @@ use the plugin.
 
 Clone the repo:
 
-    $ git clone https://github.com/tmux-plugins/tmux-persist ~/clone/path
+    $ git clone https://github.com/hyoretsu/tmux-persist ~/clone/path
 
 Add this line to the bottom of `.tmux.conf`:
 

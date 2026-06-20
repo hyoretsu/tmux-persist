@@ -1,4 +1,4 @@
-tmux-persist no longer restores shell history for each pane, as of [this PR](https://github.com/tmux-plugins/tmux-persist/pull/308).
+tmux-persist no longer restores shell history for each pane, as of [this PR](https://github.com/tmux-plugins/tmux-resurrect/pull/308).
 
 As a workaround, you can use the `HISTFILE` environment variable to preserve history for each pane separately, and modify
 `PROMPT_COMMAND` to make sure history gets saved with each new command.

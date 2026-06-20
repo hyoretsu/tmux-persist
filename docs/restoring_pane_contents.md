@@ -56,7 +56,7 @@ Example:
 
         set -g default-command "reattach-to-user-namespace -l $SHELL"
 
-Related [bug](https://github.com/tmux-plugins/tmux-persist/issues/98).
+Related [bug](https://github.com/tmux-plugins/tmux-resurrect/issues/98).
 
 Alternatively, you can let
 [tmux-sensible](https://github.com/tmux-plugins/tmux-sensible)

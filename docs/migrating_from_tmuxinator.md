@@ -68,5 +68,5 @@ A couple tips if you decide to switch to `tmux-persist`:
 ### Other questions?
 
 Still have questions? Feel free to open an
-[issue](ihttps://github.com/tmux-plugins/tmux-persist/issues). We'll try to
+[issue](https://github.com/hyoretsu/tmux-persist/issues). We'll try to
 answer it and also update this doc.

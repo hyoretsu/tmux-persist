@@ -189,6 +189,10 @@ strip_trailing_prompt() {
 			}
 
 			for (j = 1; j <= last; j++) print lines[j]
+			# If real content survived, leave one blank line after it so the prompt
+			# the restored shell redraws sits below a gap instead of jammed against
+			# the last line of output.
+			if (last >= 1) print ""
 		}
 	'
 }

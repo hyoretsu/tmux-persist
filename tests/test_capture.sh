@@ -113,7 +113,7 @@ eof="realwork-out
 ${esc}[34m╭─ box ─╮${esc}[0m
 ${esc}[34m╰─ ❯ ${esc}[0m
 exit"
-assert_eq "$(printf '%s\n' "$eof" | strip_trailing_prompt | tail -1)" "realwork-out" "EOF prompt + bash 'exit' line dropped"
+assert_eq "$(printf '%s\n' "$eof" | strip_trailing_prompt | grep . | tail -1)" "realwork-out" "EOF prompt + bash 'exit' line dropped"
 
 # EOF on top of an existing stack: the extra "exit" line shifts the bottom block,
 # but phase B still collapses the periodic stack underneath.
@@ -127,7 +127,7 @@ ${esc}[34m╰─ ─╯${esc}[0m
 ${esc}[34m╭─ box ─╮${esc}[0m
 ${esc}[34m╰─ ❯ ${esc}[0m
 exit"
-assert_eq "$(printf '%s\n' "$eofstack" | strip_trailing_prompt | tail -1)" "real-output" "EOF over a stack heals down to real output"
+assert_eq "$(printf '%s\n' "$eofstack" | strip_trailing_prompt | grep . | tail -1)" "real-output" "EOF over a stack heals down to real output"
 
 # a numbered list shares a leading char but is not a prompt stack - never eaten.
 numbered="item-1
@@ -140,5 +140,19 @@ ${esc}[34m╰─ ❯ ${esc}[0m"
 numbered_out="$(printf '%s\n' "$numbered" | strip_trailing_prompt)"
 assert_contains "$numbered_out" "item-1" "numbered list: first item kept"
 assert_eq       "$(printf '%s\n' "$numbered_out" | tail -1)" "item-4" "numbered list: not collapsed by phase B"
+
+# when content survives, a trailing blank line is emitted so the restored prompt
+# sits below a gap (use wc -l, since $() would strip the trailing newline).
+gap="$(printf '%s\n' "kept-line
+
+${esc}[34m╭─ box ─╮${esc}[0m
+${esc}[34m╰─ ❯ ${esc}[0m" | strip_trailing_prompt | wc -l)"
+assert_eq "$(echo $gap)" "2" "trailing blank line added after surviving content"
+# but an all-prompt capture stays empty (no leading blank on restore).
+gap0="$(printf '%s\n' "${esc}[34m╭─ a 14:00 ─╮${esc}[0m
+${esc}[34m╰─ ─╯${esc}[0m
+${esc}[34m╭─ a 14:01 ─╮${esc}[0m
+${esc}[34m╰─ ─╯${esc}[0m" | strip_trailing_prompt | wc -c)"
+assert_eq "$(echo $gap0)" "0" "no blank line when nothing survives"
 
 finish

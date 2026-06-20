@@ -97,6 +97,7 @@ main() {
 	set_script_path_options
 	set_save_on_exit_hooks
 	set_auto_restore_hook
+	migrate_legacy_snapshots
 	prune_all_old_backups
 	restore_existing_sessions_once
 	return 0

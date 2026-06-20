@@ -9,10 +9,10 @@ Restore `tmux` environment after system restart.
 > pane-contents capture so each session is saved and restored separately, and
 > enables pane-contents capture by default.
 >
-> Coming from tmux-resurrect? Your config keeps working: unset `@persist-*`
-> options fall back to the old `@resurrect-*` names and directory (deprecated -
-> rename when convenient). Snapshots saved by tmux-resurrect use the old format,
-> though, so save once after switching.
+> Coming from tmux-resurrect? Upgrading is seamless: unset `@persist-*` options
+> fall back to the old `@resurrect-*` names and directory (deprecated - rename
+> when convenient), and your previously saved snapshot is migrated to the new
+> per-session format automatically on first load.
 
 Tmux is great, except when you have to restart the computer. You lose all the
 running programs, working directories, pane layouts etc.

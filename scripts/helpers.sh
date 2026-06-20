@@ -259,6 +259,54 @@ prune_all_old_backups() {
 	done
 }
 
+# One-time migration of a tmux-resurrect global snapshot (a single
+# "tmux_resurrect_<ts>.txt" plus a shared "pane_contents.tar.gz") into per-session
+# tmux-persist snapshots. Idempotent via a marker file; never clobbers a session
+# that already has a tmux-persist snapshot.
+migrate_legacy_snapshots() {
+	local dir="$(persist_dir)"
+	local flag="$dir/.migrated_from_resurrect"
+	[ -f "$flag" ] && return
+
+	# Newest old global snapshot: the "last" symlink, else the latest by name.
+	shopt -s nullglob
+	local old_file="" f
+	if [ -e "$dir/last" ]; then
+		old_file="$dir/last"
+	else
+		for f in "$dir/tmux_resurrect_"*.txt; do old_file="$f"; done
+	fi
+	[ -n "$old_file" ] && [ -e "$old_file" ] || return
+
+	# Unpack the shared pane-contents archive once (old name scheme: pane-<id>).
+	local work="$dir/.migrate"
+	rm -rf "$work"; mkdir -p "$work"
+	[ -f "$dir/pane_contents.tar.gz" ] &&
+		gzip -d < "$dir/pane_contents.tar.gz" | tar xf - -C "$work" 2>/dev/null
+
+	local sessions session pc
+	sessions="$(awk -F'\t' '($1=="pane"||$1=="window"){print $2}' "$old_file" 2>/dev/null | sort -u)"
+	while IFS= read -r session; do
+		[ -n "$session" ] || continue
+		[ -e "$(last_session_file "$session")" ] && continue   # keep existing persist snapshot
+
+		rm -rf "$dir/save"; mkdir -p "$dir/save"
+		awk -F'\t' -v s="$session" \
+			'($1=="pane"||$1=="window"||$1=="grouped_session") && $2==s' \
+			"$old_file" > "$dir/save/layout"
+		for pc in "$work/pane_contents/pane-${session}:"*; do
+			mkdir -p "$dir/save/pane_contents"
+			cp "$pc" "$dir/save/pane_contents/"
+		done
+		snapshot_create "$session"
+	done <<EOF
+$sessions
+EOF
+
+	rm -rf "$work" "$dir/save"
+	touch "$flag"
+}
+
 execute_hook() {
 	local kind="$1"
 	shift

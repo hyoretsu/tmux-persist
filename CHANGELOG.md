@@ -2,17 +2,18 @@
 
 ### v5.0.0, 2026-06-20
 
-First release of the `tmux-persist` fork. Existing tmux-resurrect **config**
-keeps working (old `@resurrect-*` options and directory are honored, deprecated),
-so upgrading needs no edits. Only previously saved **snapshots** use the old
-on-disk format and are not restored - save once after upgrading.
+First release of the `tmux-persist` fork. Upgrading from tmux-resurrect needs no
+changes: existing config keeps working and saved data is migrated automatically.
 
+- Automatically migrates a tmux-resurrect global snapshot
+  (`tmux_resurrect_<ts>.txt` + shared `pane_contents.tar.gz`) into per-session
+  tmux-persist snapshots on first load. Runs once, never overwrites an existing
+  persist snapshot.
 - Backward compatible with tmux-resurrect config: any unset `@persist-*` option
   falls back to its old `@resurrect-*` name, and the legacy `~/.tmux/resurrect`
   (or `$XDG_DATA_HOME/tmux/resurrect`) directory is used if no persist dir
   exists. Old options still work but are deprecated (a one-time notice advises
-  renaming them). Note: snapshot files saved by tmux-resurrect use the old
-  format and are not restored - re-save after upgrading.
+  renaming them).
 - CI moved from Travis to GitHub Actions; the test suite runs on every pull
   request (and on demand via workflow_dispatch).
 - Disabling `@persist-save-on-exit` / `@persist-auto-restore` now removes the

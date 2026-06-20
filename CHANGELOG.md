@@ -1,5 +1,13 @@
 # Changelog
 
+### v5.1.0, 2026-06-20
+
+- Restored panes no longer pile up duplicate shell prompts. The trailing prompt is
+  stripped from saved pane contents, and snapshots already bloated by earlier
+  versions clean themselves up on the next save. Works with any prompt, keeps your
+  commands and their output, and applies whether you detach or exit with
+  `Ctrl-d`.
+
 ### v5.0.0, 2026-06-20
 
 First release of the `tmux-persist` fork. Upgrading from tmux-resurrect needs no
@@ -40,27 +48,6 @@ changes: existing config keeps working and saved data is migrated automatically.
   `$XDG_DATA_HOME/tmux/persist`).
 - Pane-contents capture is now **enabled by default** (set
   `@persist-capture-pane-contents 'off'` to disable).
-- Trailing blank lines are trimmed from captured pane contents, including
-  escape-only prompt redraws, so exiting a shell with `Ctrl-d` no longer leaves
-  a block of empty lines in the snapshot.
-- When a pane is captured while its shell is idle at the prompt, the trailing
-  prompt is dropped from the snapshot. A restored pane runs `cat <file>; exec
-  <shell>` and the shell redraws its own prompt, so keeping the captured one left
-  a duplicate above the live prompt (a multi-line prompt like starship's box
-  looked like a couple of blank lines after a `Ctrl-d`/detach + restore). Because
-  the saved prompt comes back on restore as the *output* of that `cat`, every
-  save/restore cycle re-saved it and the prompts piled into a tall, immortal
-  stack. The trim now takes the bottom (idle) prompt block as a template - keyed
-  on each line's leading glyph, so a clock in the prompt doesn't matter - and
-  peels off every stacked copy above it, including ones sitting in scrollback as
-  cat-restored output. Existing bloated snapshots therefore collapse on the next
-  save and stay clean. The trim also fires when the shell has just exited via
-  `Ctrl-d`/EOF (the cursor jumps below the prompt, so the check is "cursor at or
-  below the last content", which still excludes a live full-screen app like vim);
-  a second pass collapses any stack left under bash's "exit" line. Real command
-  output is never trimmed - removal must match the prompt template, and a stack is
-  only collapsed when it repeats with a multi-line period (so a numbered list,
-  which merely shares a leading char, is safe).
 - **Auto-save on exit.** Sessions are saved automatically on the
   `client-detached` and `session-closed` tmux hooks (covers detaching,
   disconnecting and exiting). Disable with `@persist-save-on-exit 'off'`.

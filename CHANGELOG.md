@@ -1,6 +1,12 @@
 # Changelog
 
-### tmux-persist fork
+### v5.0.0, 2026-06-20
+
+First release of the `tmux-persist` fork. Existing tmux-resurrect **config**
+keeps working (old `@resurrect-*` options and directory are honored, deprecated),
+so upgrading needs no edits. Only previously saved **snapshots** use the old
+on-disk format and are not restored - save once after upgrading.
+
 - Backward compatible with tmux-resurrect config: any unset `@persist-*` option
   falls back to its old `@resurrect-*` name, and the legacy `~/.tmux/resurrect`
   (or `$XDG_DATA_HOME/tmux/resurrect`) directory is used if no persist dir

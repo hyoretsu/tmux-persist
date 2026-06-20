@@ -5,9 +5,7 @@
 Restore `tmux` environment after system restart.
 
 > `tmux-persist` is a maintained fork of the (abandoned)
-> [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect). It fixes
-> pane-contents capture so each session is saved and restored separately, and
-> enables pane-contents capture by default.
+> [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect). It automatically saves and restores pane-contents and layout per session on every kill/detach/start.
 >
 > Coming from tmux-resurrect? Upgrading is seamless: unset `@persist-*` options
 > fall back to the old `@resurrect-*` names and directory (deprecated - rename
@@ -111,6 +109,8 @@ You should now be able to use the plugin.
 
 **Configuration**
 
+- **[Full options reference](docs/options.md)** — every option, its default and
+  what it does, in one place.
 - [Changing the default key bindings](docs/custom_key_bindings.md).
 - [Setting up hooks on save & restore](docs/hooks.md).
 - Only a conservative list of programs is restored by default:<br/>

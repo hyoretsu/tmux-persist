@@ -349,7 +349,8 @@ restore_active_and_alternate_windows() {
 # users' restore problems.
 cleanup_restored_pane_contents() {
 	if is_restoring_pane_contents; then
-		rm "$(pane_contents_dir "restore")"/*
+		# remove the whole staging tree, not just its files
+		rm -rf "$(persist_dir)/restore"
 	fi
 }
 

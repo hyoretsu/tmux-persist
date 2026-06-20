@@ -258,7 +258,8 @@ save_session() {
 		mkdir -p "$(pane_contents_dir "save")"
 		dump_pane_contents "$session"
 		pane_contents_create_archive "$session"
-		rm -f "$(pane_contents_dir "save")"/*
+		# remove the whole staging tree, not just its files
+		rm -rf "$(persist_dir)/save"
 	fi
 }
 

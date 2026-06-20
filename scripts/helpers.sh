@@ -89,6 +89,110 @@ strip_trailing_blank_lines() {
 	'
 }
 
+# Like strip_trailing_blank_lines, but also drops the trailing idle shell prompt.
+# A restored pane runs "cat <file>; exec <shell>": the shell redraws its own
+# prompt, so any prompt left in the captured file shows up as a duplicate above
+# the live one. Worse, the saved prompts arrive on restore as the *output* of that
+# cat - so the next capture re-saves them as scrollback and they pile up into a
+# tall stack of identical empty prompts that never goes away (a multi-line prompt
+# like starship's box just looked like a growing run of blank lines).
+#
+# Phase A takes the bottom prompt block as a template and peels off every copy of
+# it stacked above:
+#   * the block height H is the trailing run of non-blank lines when that run is
+#     blank-bounded and no taller than a prompt (MAXH); else the shortest period
+#     (1..MAXP) the run repeats with (an already-stacked capture); else 1.
+#   * the template is the leading visible char of each of those H lines - stable
+#     box-drawing/prompt glyphs, immune to a clock or other volatile content.
+#   then drop trailing blocks (skipping blank separators) whose H leading chars
+#   match the template, walking up until a block doesn't match.
+# Phase B then collapses any multi-line prompt stack newly exposed underneath -
+# a run that is fully periodic with period >=2 and at least two repeats. This is
+# what heals a stack left under a bash "exit" line after a Ctrl-d/EOF, where the
+# extra line keeps phase A's template from matching the stack directly.
+# Matching against the real prompt / requiring a multi-line repeat keeps command
+# output safe: a numbered list ("out-1", "out-2", ...) shares a leading char but
+# matches neither, so it is never eaten.
+# Call this when the pane's trailing content is a prompt (see pane_prompt_at_bottom).
+strip_trailing_prompt() {
+	awk -v esc="$(printf '\033')" -v MAXP=6 -v MAXH=4 '
+		function visible(s) {
+			gsub(esc "\\[[0-9;?]*[ -/]*[@-~]", "", s)
+			gsub(esc "\\][^\007]*\007", "", s)
+			gsub(/[ \t]+$/, "", s)
+			return s
+		}
+		# leading visible character of a line (after escapes/whitespace), or "".
+		function lead(s,  v) { v = visible(s); sub(/^[ \t]+/, "", v); return substr(v, 1, 1) }
+		{ lines[NR] = $0; fc[NR] = lead($0); if (visible($0) != "") last = NR }
+		END {
+			if (last < 1) exit                              # nothing but blanks
+
+			# trailing run of non-blank lines, and whether a blank line bounds it.
+			run0 = last
+			while (run0 > 1 && visible(lines[run0 - 1]) != "") run0--
+			runlen = last - run0 + 1
+
+			# height H of the bottom prompt block.
+			period = 0
+			for (h = 1; h <= MAXP && h < runlen; h++) {
+				ok = 1
+				for (k = 0; k < h; k++) {
+					a = last - k; b = last - h - k
+					if (b < run0 || fc[a] == "" || fc[a] != fc[b]) { ok = 0; break }
+				}
+				if (ok) { period = h; break }
+			}
+			if (run0 > 1 && runlen <= MAXH) H = runlen       # blank-bounded single prompt
+			else if (period > 0) H = period                  # already-stacked capture
+			else H = 1                                       # lone/one-line prompt
+
+			# template = leading char of each line of the bottom block.
+			for (i = 0; i < H; i++) tmpl[i] = fc[last - i]
+
+			# Phase A: peel every trailing block whose leading chars match the template.
+			while (1) {
+				while (last >= 1 && visible(lines[last]) == "") last--   # skip blank separators
+				if (last < H) break
+				m = 1
+				for (i = 0; i < H; i++) if (fc[last - i] == "" || fc[last - i] != tmpl[i]) { m = 0; break }
+				if (!m) break
+				last -= H
+			}
+
+			# Phase B: collapse any multi-line prompt stack now exposed (fully
+			# periodic, period >=2, at least two repeats).
+			while (1) {
+				while (last >= 1 && visible(lines[last]) == "") last--
+				if (last < 1) break
+				r0 = last
+				while (r0 > 1 && visible(lines[r0 - 1]) != "") r0--
+				rl = last - r0 + 1
+				p = 0
+				for (h = 2; h <= MAXP && h * 2 <= rl; h++) {
+					ok = 1
+					for (k = 0; k < rl - h; k++) {
+						if (fc[last - k] == "" || fc[last - k] != fc[last - h - k]) { ok = 0; break }
+					}
+					# require >=2 distinct leading chars in one period, so a run of
+					# same-prefix output ("out-1", "out-2", ...) is not mistaken for a
+					# stack; a real multi-line prompt varies (e.g. box top vs bottom).
+					if (ok) {
+						delete seen; distinct = 0
+						for (k = 0; k < h; k++) if (!(fc[last - k] in seen)) { seen[fc[last - k]] = 1; distinct++ }
+						if (distinct < 2) ok = 0
+					}
+					if (ok) { p = h; break }
+				}
+				if (p == 0) break
+				last = r0 - 1
+			}
+
+			for (j = 1; j <= last; j++) print lines[j]
+		}
+	'
+}
+
 files_differ() {
 	! cmp -s "$1" "$2"
 }

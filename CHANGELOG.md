@@ -1,6 +1,8 @@
 # Changelog
 
 ### tmux-persist fork
+- CI moved from Travis to GitHub Actions; the test suite runs on every push to
+  `master` and on every pull request.
 - Disabling `@persist-save-on-exit` / `@persist-auto-restore` now removes the
   corresponding tmux hooks (previously toggling off left them active until the
   server restarted).

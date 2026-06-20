@@ -32,15 +32,20 @@ set_script_path_options() {
 }
 
 set_save_on_exit_hooks() {
+	local hook
 	if [ "$(get_tmux_option "$save_on_exit_option" "$default_save_on_exit")" = "on" ]; then
 		# Save every session: on detach/close tmux exposes no "current session"
 		# to target, so "all" is the only reliable choice here.
 		local save_command="run-shell \"$CURRENT_DIR/scripts/save.sh quiet all\""
 		# Replace (not append) so re-sourcing the config does not stack duplicate
 		# hooks. '2>/dev/null' keeps older tmux versions (without these hooks) quiet.
-		local hook
 		for hook in client-detached session-closed; do
 			tmux set-hook -g "$hook" "$save_command" 2>/dev/null
+		done
+	else
+		# Disabled: remove our hooks so toggling off actually takes effect.
+		for hook in client-detached session-closed; do
+			tmux set-hook -gu "$hook" 2>/dev/null
 		done
 	fi
 }
@@ -52,6 +57,8 @@ set_auto_restore_hook() {
 		# name. Replace, not append, to stay idempotent across config reloads.
 		tmux set-hook -g session-created \
 			"run-shell \"$CURRENT_DIR/scripts/restore.sh #{hook_session_name} quiet\"" 2>/dev/null
+	else
+		tmux set-hook -gu session-created 2>/dev/null
 	fi
 }
 

@@ -1,6 +1,13 @@
 # Changelog
 
 ### tmux-persist fork
+- Disabling `@persist-save-on-exit` / `@persist-auto-restore` now removes the
+  corresponding tmux hooks (previously toggling off left them active until the
+  server restarted).
+- Replaced the old tmux-test/expect tests with a self-contained suite
+  (`./tests/run.sh`) covering per-session save/restore, capture-by-default,
+  save-all, auto-restore on creation, age/cap/expiry/collision pruning, and the
+  together/separate snapshot formats. Dropped the `tmux-test` submodule.
 - Pane contents are now stored **inside each snapshot** instead of one shared
   per-session archive, so historical snapshots keep their own contents. New
   `@persist-snapshot-format` chooses how: `together` (default; one

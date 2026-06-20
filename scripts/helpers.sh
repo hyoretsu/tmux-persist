@@ -73,6 +73,138 @@ capture_pane_contents_option_on() {
 	[ "$option" == "on" ]
 }
 
+# Strips trailing lines that are only escape sequences and/or whitespace (e.g.
+# the blank prompt redraw left after exiting a shell with Ctrl-d). Lines that are
+# kept keep their escapes; interior blank lines are preserved.
+strip_trailing_blank_lines() {
+	awk -v esc="$(printf '\033')" '
+		function visible(s) {
+			gsub(esc "\\[[0-9;?]*[ -/]*[@-~]", "", s)   # CSI escapes (colors, cursor moves)
+			gsub(esc "\\][^\007]*\007", "", s)           # OSC escapes (e.g. window titles)
+			gsub(/[ \t]+$/, "", s)
+			return s
+		}
+		{ lines[NR] = $0; if (visible($0) != "") last = NR }
+		END { for (i = 1; i <= last; i++) print lines[i] }
+	'
+}
+
+# Like strip_trailing_blank_lines, but also drops the trailing idle shell prompt.
+# A restored pane runs "cat <file>; exec <shell>": the shell redraws its own
+# prompt, so any prompt left in the captured file shows up as a duplicate above
+# the live one. Worse, the saved prompts arrive on restore as the *output* of that
+# cat - so the next capture re-saves them as scrollback and they pile up into a
+# tall stack of identical empty prompts that never goes away (a multi-line prompt
+# like starship's box just looked like a growing run of blank lines).
+#
+# Lines are compared by their letters only (see key()): nothing about a specific
+# prompt theme is hardcoded - box-drawing glyphs, the prompt symbol, padding and
+# the clock are all disregarded, so this works for any prompt, not just starship.
+#
+# Phase A takes the bottom prompt block as a template and peels off every copy of
+# it stacked above:
+#   * the block height H is the trailing run of non-blank lines when that run is
+#     blank-bounded and no taller than a prompt (MAXH); else the shortest period
+#     (1..MAXP) the run repeats with (an already-stacked capture); else 1.
+#   * the template is the letter-key of each of those H lines.
+#   then drop trailing blocks (skipping blank separators) whose keys match the
+#   template, walking up until a block doesn't match. An empty prompt has an empty
+#   input-line key; a prompt carrying a no-output command (e.g. "touch a.txt")
+#   keeps that command in its key, so it differs and is never erased.
+# Phase B then collapses any multi-line prompt stack newly exposed underneath -
+# a run that is fully periodic with period >=2 and at least two repeats. This is
+# what heals a stack left under a bash "exit" line after a Ctrl-d/EOF, where the
+# extra line keeps phase A's template from matching the stack directly.
+# Requiring a multi-line repeat (>=2 distinct keys) keeps output safe: a numbered
+# list ("out-1", "out-2", ...) has one repeating key and so is never collapsed.
+# Call this when the pane's trailing content is a prompt (see pane_prompt_at_bottom).
+strip_trailing_prompt() {
+	awk -v esc="$(printf '\033')" -v MAXP=6 -v MAXH=4 '
+		function visible(s) {
+			gsub(esc "\\[[0-9;?]*[ -/]*[@-~]", "", s)
+			gsub(esc "\\][^\007]*\007", "", s)
+			gsub(/[ \t]+$/, "", s)
+			return s
+		}
+		# Per-line key: the letters only. Box-drawing, the prompt glyph, spaces and
+		# the clock are dropped, so two empty prompts compare equal despite a varying
+		# clock or a flaky right border - but a prompt with a typed command (whose
+		# output was empty, e.g. "touch a.txt") keeps that command in its key and so
+		# is NOT mistaken for an empty prompt to be peeled.
+		function key(s,  v) { v = visible(s); gsub(/[^a-zA-Z]/, "", v); return v }
+		{ lines[NR] = $0; kk[NR] = key($0); if (visible($0) != "") last = NR }
+		END {
+			if (last < 1) exit                              # nothing but blanks
+
+			# trailing run of non-blank lines, and whether a blank line bounds it.
+			run0 = last
+			while (run0 > 1 && visible(lines[run0 - 1]) != "") run0--
+			runlen = last - run0 + 1
+
+			# height H of the bottom prompt block.
+			period = 0
+			for (h = 1; h <= MAXP && h < runlen; h++) {
+				ok = 1
+				for (k = 0; k < h; k++) {
+					a = last - k; b = last - h - k
+					if (b < run0 || kk[a] != kk[b]) { ok = 0; break }
+				}
+				if (ok) { period = h; break }
+			}
+			if (run0 > 1 && runlen <= MAXH) H = runlen       # blank-bounded single prompt
+			else if (period > 0) H = period                  # already-stacked capture
+			else H = 1                                       # lone/one-line prompt
+
+			# template = letter-key of each line of the bottom block.
+			for (i = 0; i < H; i++) tmpl[i] = kk[last - i]
+
+			# Phase A: peel every trailing block whose letter-keys match the template.
+			while (1) {
+				while (last >= 1 && visible(lines[last]) == "") last--   # skip blank separators
+				if (last < H) break
+				m = 1
+				for (i = 0; i < H; i++) if (kk[last - i] != tmpl[i]) { m = 0; break }
+				if (!m) break
+				last -= H
+			}
+
+			# Phase B: collapse any multi-line prompt stack now exposed (fully
+			# periodic, period >=2, at least two repeats).
+			while (1) {
+				while (last >= 1 && visible(lines[last]) == "") last--
+				if (last < 1) break
+				r0 = last
+				while (r0 > 1 && visible(lines[r0 - 1]) != "") r0--
+				rl = last - r0 + 1
+				p = 0
+				for (h = 2; h <= MAXP && h * 2 <= rl; h++) {
+					ok = 1
+					for (k = 0; k < rl - h; k++) {
+						if (kk[last - k] != kk[last - h - k]) { ok = 0; break }
+					}
+					# require >=2 distinct keys in one period, so a run of same-prefix
+					# output ("out-1", "out-2", ...) is not mistaken for a stack; a real
+					# multi-line prompt varies (e.g. box top "system" vs empty input).
+					if (ok) {
+						delete seen; distinct = 0
+						for (k = 0; k < h; k++) if (!(kk[last - k] in seen)) { seen[kk[last - k]] = 1; distinct++ }
+						if (distinct < 2) ok = 0
+					}
+					if (ok) { p = h; break }
+				}
+				if (p == 0) break
+				last = r0 - 1
+			}
+
+			for (j = 1; j <= last; j++) print lines[j]
+			# If real content survived, leave one blank line after it so the prompt
+			# the restored shell redraws sits below a gap instead of jammed against
+			# the last line of output.
+			if (last >= 1) print ""
+		}
+	'
+}
+
 files_differ() {
 	! cmp -s "$1" "$2"
 }

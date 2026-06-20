@@ -139,6 +139,29 @@ pane_has_any_content() {
 		[ "$(number_nonempty_lines_on_screen "$pane_id")" -gt 1 ]
 }
 
+# True when the trailing content of the pane is a shell prompt rather than a live
+# full-screen program - the cursor is at or below the last non-blank row. That
+# covers both an idle shell (cursor on its prompt) and a shell that just exited
+# via Ctrl-d/EOF (cursor jumped past the prompt to the bottom). It is false only
+# when the cursor sits ABOVE the last content, i.e. a full-screen app (vim, less)
+# is drawing - exactly when the trailing lines must not be treated as a prompt.
+# Capture the visible rows without -J so row indices line up with #{cursor_y}.
+pane_prompt_at_bottom() {
+	local pane_id="$1"
+	local cursor_y="$(tmux display -p -t "$pane_id" -F "#{cursor_y}")"
+	local last_row="$(tmux capture-pane -ep -t "$pane_id" |
+		awk -v esc="$(printf '\033')" '
+			function visible(s) {
+				gsub(esc "\\[[0-9;?]*[ -/]*[@-~]", "", s)
+				gsub(esc "\\][^\007]*\007", "", s)
+				gsub(/[ \t]+$/, "", s)
+				return s
+			}
+			{ if (visible($0) != "") last = NR }
+			END { print last - 1 }')"
+	[ "$cursor_y" -ge "$last_row" ] 2>/dev/null
+}
+
 capture_pane_contents() {
 	local pane_id="$1"
 	local start_line="-$2"
@@ -147,8 +170,15 @@ capture_pane_contents() {
 		if [ "$pane_contents_area" = "visible" ]; then
 			start_line="0"
 		fi
-		# the printf hack below removes *trailing* empty lines
-		printf '%s\n' "$(tmux capture-pane -epJ -S "$start_line" -t "$pane_id")" > "$(pane_contents_file "save" "$pane_id")"
+		# Drop trailing blank lines (incl. escape-only prompt redraws) so a
+		# Ctrl-d exit doesn't leave a gap of empty lines in the snapshot. When the
+		# pane's trailing content is a shell prompt (idle, or just exited via EOF),
+		# drop that prompt too: the restored shell redraws its own, so keeping it
+		# yields a duplicate that piles up across save/restore cycles.
+		local filter="strip_trailing_blank_lines"
+		pane_prompt_at_bottom "$pane_id" && filter="strip_trailing_prompt"
+		tmux capture-pane -epJ -S "$start_line" -t "$pane_id" |
+			"$filter" > "$(pane_contents_file "save" "$pane_id")"
 	fi
 }
 

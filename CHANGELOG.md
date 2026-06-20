@@ -1,5 +1,13 @@
 # Changelog
 
+### v5.1.0, 2026-06-20
+
+- Restored panes no longer pile up duplicate shell prompts. The trailing prompt is
+  stripped from saved pane contents, and snapshots already bloated by earlier
+  versions clean themselves up on the next save. Works with any prompt, keeps your
+  commands and their output, and applies whether you detach or exit with
+  `Ctrl-d`.
+
 ### v5.0.0, 2026-06-20
 
 First release of the `tmux-persist` fork. Upgrading from tmux-resurrect needs no

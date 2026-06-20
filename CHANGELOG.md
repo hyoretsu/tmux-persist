@@ -1,6 +1,12 @@
 # Changelog
 
 ### tmux-persist fork
+- Backward compatible with tmux-resurrect config: any unset `@persist-*` option
+  falls back to its old `@resurrect-*` name, and the legacy `~/.tmux/resurrect`
+  (or `$XDG_DATA_HOME/tmux/resurrect`) directory is used if no persist dir
+  exists. Old options still work but are deprecated (a one-time notice advises
+  renaming them). Note: snapshot files saved by tmux-resurrect use the old
+  format and are not restored - re-save after upgrading.
 - CI moved from Travis to GitHub Actions; the test suite runs on every pull
   request (and on demand via workflow_dispatch).
 - Disabling `@persist-save-on-exit` / `@persist-auto-restore` now removes the

@@ -79,7 +79,18 @@ restore_existing_sessions_once() {
 	fi
 }
 
+# If the user still has any old @resurrect-* options set, they keep working
+# (see get_tmux_option), but advise migrating - once per server.
+warn_legacy_options() {
+	[ "$(tmux show-option -gqv @persist-legacy-warned)" = "1" ] && return
+	if tmux show-options -g 2>/dev/null | grep -q '^@resurrect-'; then
+		tmux set-option -g @persist-legacy-warned 1
+		tmux display-message "tmux-persist: '@resurrect-*' options are deprecated - rename them to '@persist-*'."
+	fi
+}
+
 main() {
+	warn_legacy_options
 	set_save_bindings
 	set_restore_bindings
 	set_default_strategies

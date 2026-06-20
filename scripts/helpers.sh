@@ -1,5 +1,10 @@
 if [ -d "$HOME/.tmux/persist" ]; then
         default_persist_dir="$HOME/.tmux/persist"
+elif [ -d "$HOME/.tmux/resurrect" ]; then
+        # legacy tmux-resurrect directory, used if no persist dir exists yet
+        default_persist_dir="$HOME/.tmux/resurrect"
+elif [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect" ]; then
+        default_persist_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/resurrect
 else
         default_persist_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/persist
 fi
@@ -14,7 +19,14 @@ d=$'\t'
 get_tmux_option() {
 	local option="$1"
 	local default_value="$2"
-	local option_value=$(tmux show-option -gqv "$option")
+	local option_value="$(tmux show-option -gqv "$option")"
+	if [ -z "$option_value" ]; then
+		# Backward compatibility: honor the old tmux-resurrect option name
+		# (e.g. @resurrect-dir) when its @persist- equivalent is unset.
+		case "$option" in
+			@persist-*) option_value="$(tmux show-option -gqv "@resurrect-${option#@persist-}")" ;;
+		esac
+	fi
 	if [ -z "$option_value" ]; then
 		echo "$default_value"
 	else

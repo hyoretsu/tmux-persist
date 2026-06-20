@@ -141,6 +141,24 @@ numbered_out="$(printf '%s\n' "$numbered" | strip_trailing_prompt)"
 assert_contains "$numbered_out" "item-1" "numbered list: first item kept"
 assert_eq       "$(printf '%s\n' "$numbered_out" | tail -1)" "item-4" "numbered list: not collapsed by phase B"
 
+# commands that produced no output sit on a prompt's input line. They are real
+# history and must be kept - only the empty live prompt at the bottom is trimmed.
+# Matching is by letters, so the typed command differs from an empty prompt.
+nooutput="Videos
+
+${esc}[34m╭─ ~ system 16:14:49 ─╮${esc}[0m
+${esc}[34m╰─ ❯ touch a.txt${esc}[0m
+
+${esc}[34m╭─ ~ system 16:15:04 ─╮${esc}[0m
+${esc}[34m╰─ ❯ rm a.txt${esc}[0m
+
+${esc}[34m╭─ ~ system 16:15:06 ─╮${esc}[0m
+${esc}[34m╰─ ❯ ${esc}[0m"
+nooutput_out="$(printf '%s\n' "$nooutput" | strip_trailing_prompt)"
+assert_contains "$nooutput_out" "touch a.txt" "no-output command 'touch a.txt' kept"
+assert_contains "$nooutput_out" "rm a.txt"    "no-output command 'rm a.txt' kept"
+assert_eq "$(printf '%s\n' "$nooutput_out" | grep . | tail -1 | sed 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g')" "╰─ ❯ rm a.txt" "only the trailing empty prompt trimmed"
+
 # when content survives, a trailing blank line is emitted so the restored prompt
 # sits below a gap (use wc -l, since $() would strip the trailing newline).
 gap="$(printf '%s\n' "kept-line

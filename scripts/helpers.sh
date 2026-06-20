@@ -97,22 +97,26 @@ strip_trailing_blank_lines() {
 # tall stack of identical empty prompts that never goes away (a multi-line prompt
 # like starship's box just looked like a growing run of blank lines).
 #
+# Lines are compared by their letters only (see key()): nothing about a specific
+# prompt theme is hardcoded - box-drawing glyphs, the prompt symbol, padding and
+# the clock are all disregarded, so this works for any prompt, not just starship.
+#
 # Phase A takes the bottom prompt block as a template and peels off every copy of
 # it stacked above:
 #   * the block height H is the trailing run of non-blank lines when that run is
 #     blank-bounded and no taller than a prompt (MAXH); else the shortest period
 #     (1..MAXP) the run repeats with (an already-stacked capture); else 1.
-#   * the template is the leading visible char of each of those H lines - stable
-#     box-drawing/prompt glyphs, immune to a clock or other volatile content.
-#   then drop trailing blocks (skipping blank separators) whose H leading chars
-#   match the template, walking up until a block doesn't match.
+#   * the template is the letter-key of each of those H lines.
+#   then drop trailing blocks (skipping blank separators) whose keys match the
+#   template, walking up until a block doesn't match. An empty prompt has an empty
+#   input-line key; a prompt carrying a no-output command (e.g. "touch a.txt")
+#   keeps that command in its key, so it differs and is never erased.
 # Phase B then collapses any multi-line prompt stack newly exposed underneath -
 # a run that is fully periodic with period >=2 and at least two repeats. This is
 # what heals a stack left under a bash "exit" line after a Ctrl-d/EOF, where the
 # extra line keeps phase A's template from matching the stack directly.
-# Matching against the real prompt / requiring a multi-line repeat keeps command
-# output safe: a numbered list ("out-1", "out-2", ...) shares a leading char but
-# matches neither, so it is never eaten.
+# Requiring a multi-line repeat (>=2 distinct keys) keeps output safe: a numbered
+# list ("out-1", "out-2", ...) has one repeating key and so is never collapsed.
 # Call this when the pane's trailing content is a prompt (see pane_prompt_at_bottom).
 strip_trailing_prompt() {
 	awk -v esc="$(printf '\033')" -v MAXP=6 -v MAXH=4 '
@@ -122,9 +126,13 @@ strip_trailing_prompt() {
 			gsub(/[ \t]+$/, "", s)
 			return s
 		}
-		# leading visible character of a line (after escapes/whitespace), or "".
-		function lead(s,  v) { v = visible(s); sub(/^[ \t]+/, "", v); return substr(v, 1, 1) }
-		{ lines[NR] = $0; fc[NR] = lead($0); if (visible($0) != "") last = NR }
+		# Per-line key: the letters only. Box-drawing, the prompt glyph, spaces and
+		# the clock are dropped, so two empty prompts compare equal despite a varying
+		# clock or a flaky right border - but a prompt with a typed command (whose
+		# output was empty, e.g. "touch a.txt") keeps that command in its key and so
+		# is NOT mistaken for an empty prompt to be peeled.
+		function key(s,  v) { v = visible(s); gsub(/[^a-zA-Z]/, "", v); return v }
+		{ lines[NR] = $0; kk[NR] = key($0); if (visible($0) != "") last = NR }
 		END {
 			if (last < 1) exit                              # nothing but blanks
 
@@ -139,7 +147,7 @@ strip_trailing_prompt() {
 				ok = 1
 				for (k = 0; k < h; k++) {
 					a = last - k; b = last - h - k
-					if (b < run0 || fc[a] == "" || fc[a] != fc[b]) { ok = 0; break }
+					if (b < run0 || kk[a] != kk[b]) { ok = 0; break }
 				}
 				if (ok) { period = h; break }
 			}
@@ -147,15 +155,15 @@ strip_trailing_prompt() {
 			else if (period > 0) H = period                  # already-stacked capture
 			else H = 1                                       # lone/one-line prompt
 
-			# template = leading char of each line of the bottom block.
-			for (i = 0; i < H; i++) tmpl[i] = fc[last - i]
+			# template = letter-key of each line of the bottom block.
+			for (i = 0; i < H; i++) tmpl[i] = kk[last - i]
 
-			# Phase A: peel every trailing block whose leading chars match the template.
+			# Phase A: peel every trailing block whose letter-keys match the template.
 			while (1) {
 				while (last >= 1 && visible(lines[last]) == "") last--   # skip blank separators
 				if (last < H) break
 				m = 1
-				for (i = 0; i < H; i++) if (fc[last - i] == "" || fc[last - i] != tmpl[i]) { m = 0; break }
+				for (i = 0; i < H; i++) if (kk[last - i] != tmpl[i]) { m = 0; break }
 				if (!m) break
 				last -= H
 			}
@@ -172,14 +180,14 @@ strip_trailing_prompt() {
 				for (h = 2; h <= MAXP && h * 2 <= rl; h++) {
 					ok = 1
 					for (k = 0; k < rl - h; k++) {
-						if (fc[last - k] == "" || fc[last - k] != fc[last - h - k]) { ok = 0; break }
+						if (kk[last - k] != kk[last - h - k]) { ok = 0; break }
 					}
-					# require >=2 distinct leading chars in one period, so a run of
-					# same-prefix output ("out-1", "out-2", ...) is not mistaken for a
-					# stack; a real multi-line prompt varies (e.g. box top vs bottom).
+					# require >=2 distinct keys in one period, so a run of same-prefix
+					# output ("out-1", "out-2", ...) is not mistaken for a stack; a real
+					# multi-line prompt varies (e.g. box top "system" vs empty input).
 					if (ok) {
 						delete seen; distinct = 0
-						for (k = 0; k < h; k++) if (!(fc[last - k] in seen)) { seen[fc[last - k]] = 1; distinct++ }
+						for (k = 0; k < h; k++) if (!(kk[last - k] in seen)) { seen[kk[last - k]] = 1; distinct++ }
 						if (distinct < 2) ok = 0
 					}
 					if (ok) { p = h; break }

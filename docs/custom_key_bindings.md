@@ -7,5 +7,5 @@ The default key bindings are:
 
 To change these, add to `.tmux.conf`:
 
-    set -g @resurrect-save 'S'
-    set -g @resurrect-restore 'R'
+    set -g @persist-save 'S'
+    set -g @persist-restore 'R'

@@ -1,16 +1,16 @@
-tmux-ressurect no longer restores shell history for each pane, as of [this PR](https://github.com/tmux-plugins/tmux-resurrect/pull/308).
+tmux-persist no longer restores shell history for each pane, as of [this PR](https://github.com/tmux-plugins/tmux-resurrect/pull/308).
 
 As a workaround, you can use the `HISTFILE` environment variable to preserve history for each pane separately, and modify
 `PROMPT_COMMAND` to make sure history gets saved with each new command.
 
 Unfortunately, we haven't found a perfect way of getting a unique identifier for each pane, as the `TMUX_PANE` variable
-seems to occasionally change when resurrecting. As a workaround, the example below sets a unique ID in each pane's `title`.
+seems to occasionally change when reviving. As a workaround, the example below sets a unique ID in each pane's `title`.
 The downside of this implementation is that pane titles must all be unique across sessions/windows, and also must use the `pane_id_prefix`.
 
 Any improvements/suggestions for getting a unique, persistent ID for each pane are welcome!
 
 ```bash
-pane_id_prefix="resurrect_"
+pane_id_prefix="persist_"
 
 # Create history directory if it doesn't exist
 HISTS_DIR=$HOME/.bash_history.d

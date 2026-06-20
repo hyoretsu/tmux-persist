@@ -7,7 +7,7 @@ spawn tmux -S/tmp/foo
 sleep 2
 
 # run restore script directly
-send "~/.tmux/plugins/tmux-resurrect/scripts/restore.sh\r"
+send "~/.tmux/plugins/tmux-persist/scripts/restore.sh\r"
 
 # long wait until tmux restore is complete
 # (things get messed up if expect client isn't attached)

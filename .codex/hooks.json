@@ -1,0 +1,36 @@
+{
+	"hooks": {
+		"PreToolUse": [
+			{
+				"hooks": [
+					{
+						"command": "serena-hooks remind --client=codex",
+						"type": "command"
+					}
+				],
+				"matcher": "Bash"
+			}
+		],
+		"SessionStart": [
+			{
+				"hooks": [
+					{
+						"command": "serena-hooks activate --client=codex",
+						"type": "command"
+					}
+				],
+				"matcher": "startup|resume"
+			}
+		],
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"command": "serena-hooks cleanup --client=codex",
+						"type": "command"
+					}
+				]
+			}
+		]
+	}
+}

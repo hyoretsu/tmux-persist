@@ -20,6 +20,29 @@ RESTORING_FROM_SCRATCH="false"
 
 RESTORE_PANE_CONTENTS="false"
 
+# Path to the extracted layout file of the snapshot being restored. Set once the
+# snapshot is unpacked in restore_all_panes.
+RESTORE_LAYOUT_FILE=""
+
+# Arguments (any order):
+#   quiet      - produce no output and no "file not found" message (used by the
+#                auto-restore hook, which fires for every new session)
+#   <session>  - restore this session instead of the current one
+# Each session is saved separately (files named "<session>_*"), so restore only
+# ever touches this one session. Without a session argument the session the
+# client is attached to is restored.
+RESTORE_SESSION=""
+RESTORE_QUIET="false"
+for arg in "$@"; do
+	case "$arg" in
+		quiet) RESTORE_QUIET="true" ;;
+		*) RESTORE_SESSION="$arg" ;;
+	esac
+done
+if [ -z "$RESTORE_SESSION" ]; then
+	RESTORE_SESSION="$(tmux display-message -p "#{client_session}")"
+fi
+
 is_line_type() {
 	local line_type="$1"
 	local line="$2"
@@ -28,9 +51,11 @@ is_line_type() {
 }
 
 check_saved_session_exists() {
-	local resurrect_file="$(last_resurrect_file)"
-	if [ ! -f $resurrect_file ]; then
-		display_message "Tmux resurrect file not found!"
+	local persist_file="$(last_session_file "$RESTORE_SESSION")"
+	if [ ! -f "$persist_file" ]; then
+		# In quiet mode (auto-restore on session creation) staying silent is
+		# expected: most new sessions have no saved snapshot.
+		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found!"
 		return 1
 	fi
 }
@@ -76,14 +101,6 @@ is_restoring_pane_contents() {
 	[ "$RESTORE_PANE_CONTENTS" == "true" ]
 }
 
-restored_session_0_true() {
-	RESTORED_SESSION_0="true"
-}
-
-has_restored_session_0() {
-	[ "$RESTORED_SESSION_0" == "true" ]
-}
-
 window_exists() {
 	local session_name="$1"
 	local window_number="$2"
@@ -120,7 +137,12 @@ tmux_default_command() {
 }
 
 pane_creation_command() {
-	echo "cat '$(pane_contents_file "restore" "${1}:${2}.${3}")'; exec $(tmux_default_command)"
+	# Fall back to a real shell if tmux has no default command/shell configured.
+	# Otherwise the pane would run "cat <file>; exec" with nothing after exec,
+	# exit immediately and the pane (and possibly the session) would close.
+	local shell_command="$(tmux_default_command)"
+	[ -n "$shell_command" ] || shell_command="${SHELL:-/bin/sh}"
+	echo "cat '$(pane_contents_file "restore" "${1}:${2}.${3}")'; exec $shell_command"
 }
 
 new_window() {
@@ -178,9 +200,6 @@ restore_pane() {
 	while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
 		dir="$(remove_first_char "$dir")"
 		pane_full_command="$(remove_first_char "$pane_full_command")"
-		if [ "$session_name" == "0" ]; then
-			restored_session_0_true
-		fi
 		if pane_exists "$session_name" "$window_number" "$pane_index"; then
 			if is_restoring_from_scratch; then
 				# overwrite the pane
@@ -203,15 +222,6 @@ restore_pane() {
 		# set pane title
 		tmux select-pane -t "$session_name:$window_number.$pane_index" -T "$pane_title"
 	done < <(echo "$pane")
-}
-
-restore_state() {
-	local state="$1"
-	echo "$state" |
-	while IFS=$d read line_type client_session client_last_session; do
-		tmux switch-client -t "$client_last_session"
-		tmux switch-client -t "$client_session"
-	done
 }
 
 restore_grouped_session() {
@@ -246,14 +256,18 @@ detect_if_restoring_from_scratch() {
 	if never_ever_overwrite; then
 		return
 	fi
-	local total_number_of_panes="$(tmux list-panes -a | wc -l | sed 's/ //g')"
+	# "From scratch" means the target session is freshly created (a single
+	# pane). In that case its lone pane is overwritten by the restore.
+	local total_number_of_panes="$(tmux list-panes -t "$RESTORE_SESSION" 2>/dev/null | wc -l | sed 's/ //g')"
 	if [ "$total_number_of_panes" -eq 1 ]; then
 		restore_from_scratch_true
 	fi
 }
 
+# Restore pane contents whenever the extracted snapshot actually carries any -
+# independent of the current capture option, so old snapshots still restore.
 detect_if_restoring_pane_contents() {
-	if capture_pane_contents_option_on; then
+	if [ -n "$(find "$(persist_dir)/restore/pane_contents" -type f -print 2>/dev/null | head -1)" ]; then
 		cache_tmux_default_command
 		restore_pane_contents_true
 	fi
@@ -263,30 +277,20 @@ detect_if_restoring_pane_contents() {
 
 restore_all_panes() {
 	detect_if_restoring_from_scratch   # sets a global variable
+	# Unpack the snapshot (layout + pane contents) into the restore staging area.
+	snapshot_extract "$RESTORE_SESSION"
+	RESTORE_LAYOUT_FILE="$(snapshot_layout_file "restore")"
 	detect_if_restoring_pane_contents  # sets a global variable
-	if is_restoring_pane_contents; then
-		pane_content_files_restore_from_archive
-	fi
 	while read line; do
 		if is_line_type "pane" "$line"; then
 			restore_pane "$line"
 		fi
-	done < $(last_resurrect_file)
-}
-
-handle_session_0() {
-	if is_restoring_from_scratch && ! has_restored_session_0; then
-		local current_session="$(tmux display -p "#{client_session}")"
-		if [ "$current_session" == "0" ]; then
-			tmux switch-client -n
-		fi
-		tmux kill-session -t "0"
-	fi
+	done < "$RESTORE_LAYOUT_FILE"
 }
 
 restore_window_properties() {
 	local window_name
-	\grep '^window' $(last_resurrect_file) |
+	\grep '^window' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename; do
 			tmux select-layout -t "${session_name}:${window_number}" "$window_layout"
 
@@ -306,7 +310,7 @@ restore_window_properties() {
 restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
-		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' $(last_resurrect_file) |
+		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
 			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
@@ -316,7 +320,7 @@ restore_all_pane_processes() {
 }
 
 restore_active_pane_for_each_window() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' $(last_resurrect_file) |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number active_pane; do
 			tmux switch-client -t "${session_name}:${window_number}"
 			tmux select-pane -t "$active_pane"
@@ -324,7 +328,7 @@ restore_active_pane_for_each_window() {
 }
 
 restore_zoomed_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' $(last_resurrect_file) |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number; do
 			tmux resize-pane -t "${session_name}:${window_number}" -Z
 		done
@@ -336,39 +340,33 @@ restore_grouped_sessions() {
 			restore_grouped_session "$line"
 			restore_active_and_alternate_windows_for_grouped_sessions "$line"
 		fi
-	done < $(last_resurrect_file)
+	done < "$RESTORE_LAYOUT_FILE"
 }
 
 restore_active_and_alternate_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' $(last_resurrect_file) |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
 		sort -u |
 		while IFS=$d read session_name active_window window_number; do
 			tmux switch-client -t "${session_name}:${window_number}"
 		done
 }
 
-restore_active_and_alternate_sessions() {
-	while read line; do
-		if is_line_type "state" "$line"; then
-			restore_state "$line"
-		fi
-	done < $(last_resurrect_file)
+# Remove the restore staging tree (layout + any pane contents) once everything
+# has been recreated. Doing it after 'restore_all_panes' also seems to fix fish
+# shell users' restore problems.
+cleanup_restored_pane_contents() {
+	rm -rf "$(persist_dir)/restore"
 }
 
-# A cleanup that happens after 'restore_all_panes' seems to fix fish shell
-# users' restore problems.
-cleanup_restored_pane_contents() {
-	if is_restoring_pane_contents; then
-		rm "$(pane_contents_dir "restore")"/*
-	fi
+show_output() {
+	[ "$RESTORE_QUIET" != "true" ]
 }
 
 main() {
 	if supported_tmux_version_ok && check_saved_session_exists; then
-		start_spinner "Restoring..." "Tmux restore complete!"
+		show_output && start_spinner "Restoring..." "Tmux restore complete!"
 		execute_hook "pre-restore-all"
 		restore_all_panes
-		handle_session_0
 		restore_window_properties >/dev/null 2>&1
 		execute_hook "pre-restore-pane-processes"
 		restore_all_pane_processes
@@ -377,11 +375,12 @@ main() {
 		restore_zoomed_windows
 		restore_grouped_sessions  # also restores active and alt windows for grouped sessions
 		restore_active_and_alternate_windows
-		restore_active_and_alternate_sessions
 		cleanup_restored_pane_contents
 		execute_hook "post-restore-all"
-		stop_spinner
-		display_message "Tmux restore complete!"
+		if show_output; then
+			stop_spinner
+			display_message "Tmux restore complete!"
+		fi
 	fi
 }
 main

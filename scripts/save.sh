@@ -10,8 +10,26 @@ source "$CURRENT_DIR/spinner_helpers.sh"
 d=$'\t'
 delimiter=$'\t'
 
-# if "quiet" script produces no output
-SCRIPT_OUTPUT="$1"
+# Arguments (any order):
+#   quiet         - produce no output (used by hooks)
+#   all           - save every session (used by the auto-save-on-exit hooks,
+#                   which fire without a "current session" to target)
+#   <session>     - save this session instead of the current one
+# Without "all" or a session argument the session the client is attached to is
+# saved.
+SCRIPT_OUTPUT=""
+SAVE_SESSION=""
+SAVE_ALL="false"
+for arg in "$@"; do
+	case "$arg" in
+		quiet) SCRIPT_OUTPUT="quiet" ;;
+		all) SAVE_ALL="true" ;;
+		*) SAVE_SESSION="$arg" ;;
+	esac
+done
+if [ "$SAVE_ALL" != "true" ] && [ -z "$SAVE_SESSION" ]; then
+	SAVE_SESSION="$(tmux display-message -p "#{client_session}")"
+fi
 
 grouped_sessions_format() {
 	local format
@@ -71,22 +89,12 @@ window_format() {
 	echo "$format"
 }
 
-state_format() {
-	local format
-	format+="state"
-	format+="${delimiter}"
-	format+="#{client_session}"
-	format+="${delimiter}"
-	format+="#{client_last_session}"
-	echo "$format"
-}
-
 dump_panes_raw() {
-	tmux list-panes -a -F "$(pane_format)"
+	tmux list-panes -s -t "$1" -F "$(pane_format)"
 }
 
 dump_windows_raw(){
-	tmux list-windows -a -F "$(window_format)"
+	tmux list-windows -t "$1" -F "$(window_format)"
 }
 
 toggle_window_zoom() {
@@ -177,18 +185,18 @@ dump_grouped_sessions() {
 		done
 }
 
-fetch_and_dump_grouped_sessions(){
-	local grouped_sessions_dump="$(dump_grouped_sessions)"
-	get_grouped_sessions "$grouped_sessions_dump"
-	if [ -n "$grouped_sessions_dump" ]; then
-		echo "$grouped_sessions_dump"
-	fi
+# Emits the single "grouped_session" line for the given session, if it is a
+# grouped (secondary) session. Reads the pre-computed dump from the environment.
+dump_grouped_session_line() {
+	local session="$1"
+	echo "$GROUPED_SESSIONS_DUMP" |
+		awk -v s="$session" 'BEGIN { FS="\t" } $1 == "grouped_session" && $2 == s'
 }
 
 # translates pane pid to process command running inside a pane
 dump_panes() {
 	local full_command
-	dump_panes_raw |
+	dump_panes_raw "$1" |
 		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
 			# not saving panes from grouped sessions
 			if is_session_grouped "$session_name"; then
@@ -201,7 +209,7 @@ dump_panes() {
 }
 
 dump_windows() {
-	dump_windows_raw |
+	dump_windows_raw "$1" |
 		while IFS=$d read line_type session_name window_index window_name window_active window_flags window_layout; do
 			# not saving windows from grouped sessions
 			if is_session_grouped "$session_name"; then
@@ -214,48 +222,73 @@ dump_windows() {
 		done
 }
 
-dump_state() {
-	tmux display-message -p "$(state_format)"
-}
-
 dump_pane_contents() {
 	local pane_contents_area="$(get_tmux_option "$pane_contents_area_option" "$default_pane_contents_area")"
-	dump_panes_raw |
+	dump_panes_raw "$1" |
 		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
 			capture_pane_contents "${session_name}:${window_number}.${pane_index}" "$history_size" "$pane_contents_area"
 		done
 }
 
-remove_old_backups() {
-	# remove resurrect files older than 30 days (default), but keep at least 5 copies of backup.
-	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
-	local -a files
-	files=($(ls -t $(resurrect_dir)/${RESURRECT_FILE_PREFIX}_*.${RESURRECT_FILE_EXTENSION} | tail -n +6))
-	[[ ${#files[@]} -eq 0 ]] ||
-		find "${files[@]}" -type f -mtime "+${delete_after}" -exec rm -v "{}" \; > /dev/null
+# Saves one session as a single snapshot file, "<session>_<timestamp>.tgz",
+# bundling its layout and (when enabled) its pane contents.
+save_session() {
+	local session="$1"
+	local layout_file="$(snapshot_layout_file "save")"
+
+	# Build the snapshot in the staging area: ./layout (+ ./pane_contents/).
+	rm -rf "$(persist_dir)/save"
+	mkdir -p "$(persist_dir)/save"
+
+	if is_session_grouped "$session"; then
+		# grouped sessions share the original session's layout, so we only
+		# record the grouping itself - never panes, windows or pane contents.
+		dump_grouped_session_line "$session" > "$layout_file"
+	else
+		{
+			dump_panes   "$session"
+			dump_windows "$session"
+		} > "$layout_file"
+		if [ "$CAPTURE_PANE_CONTENTS" = "on" ]; then
+			mkdir -p "$(pane_contents_dir "save")"
+			dump_pane_contents "$session"
+		fi
+	fi
+
+	execute_hook "post-save-layout" "$layout_file"
+
+	snapshot_create "$session"
+
+	# remove the whole staging tree, not just its files
+	rm -rf "$(persist_dir)/save"
 }
 
 save_all() {
-	local resurrect_file_path="$(resurrect_file_path)"
-	local last_resurrect_file="$(last_resurrect_file)"
-	mkdir -p "$(resurrect_dir)"
-	fetch_and_dump_grouped_sessions > "$resurrect_file_path"
-	dump_panes   >> "$resurrect_file_path"
-	dump_windows >> "$resurrect_file_path"
-	dump_state   >> "$resurrect_file_path"
-	execute_hook "post-save-layout" "$resurrect_file_path"
-	if files_differ "$resurrect_file_path" "$last_resurrect_file"; then
-		ln -fs "$(basename "$resurrect_file_path")" "$last_resurrect_file"
+	# Nothing to save (e.g. invoked with no attached client and no session arg).
+	[ "$SAVE_ALL" = "true" ] || [ -n "$SAVE_SESSION" ] || return
+	mkdir -p "$(persist_dir)"
+	# Compute grouped-session info. It is needed so that panes/windows belonging
+	# to a grouped session are skipped (they share the original session's
+	# layout). Both are exported so save_session and its subshells can read them.
+	export GROUPED_SESSIONS_DUMP="$(dump_grouped_sessions)"
+	get_grouped_sessions "$GROUPED_SESSIONS_DUMP"
+	export CAPTURE_PANE_CONTENTS="off"
+	capture_pane_contents_option_on && export CAPTURE_PANE_CONTENTS="on"
+
+	if [ "$SAVE_ALL" = "true" ]; then
+		# Used by the auto-save-on-exit hooks: tmux gives no "current session"
+		# on detach, so save every live session to be safe.
+		tmux list-sessions -F "#{session_name}" 2>/dev/null |
+			while IFS= read -r session; do
+				save_session "$session"
+			done
 	else
-		rm "$resurrect_file_path"
+		save_session "$SAVE_SESSION"
 	fi
-	if capture_pane_contents_option_on; then
-		mkdir -p "$(pane_contents_dir "save")"
-		dump_pane_contents
-		pane_contents_create_archive
-		rm "$(pane_contents_dir "save")"/*
-	fi
-	remove_old_backups
+
+	# Drop snapshots that are now too old, across all sessions.
+	prune_all_old_backups
+
 	execute_hook "post-save-all"
 }
 

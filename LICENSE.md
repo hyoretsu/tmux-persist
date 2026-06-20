@@ -1,4 +1,5 @@
-Copyright (C) 2014 Bruno Sutic
+Copyright (C) 2014 Bruno Sutic (original tmux-resurrect)
+Copyright (C) 2026 Aran Leite (tmux-persist fork)
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),

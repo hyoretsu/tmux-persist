@@ -154,6 +154,10 @@ Both contributing and bug reports are welcome. Please check out
 
 ### Credits
 
+[Bruno Sutic](https://github.com/bruno-) and the
+[tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) contributors -
+`tmux-persist` is a fork of their work.
+
 [Mislav Marohnić](https://github.com/mislav) - the idea for the plugin came from his
 [tmux-session script](https://github.com/mislav/dotfiles/blob/2036b5e03fb430bbcbc340689d63328abaa28876/bin/tmux-session).
 

@@ -40,6 +40,9 @@ changes: existing config keeps working and saved data is migrated automatically.
   `$XDG_DATA_HOME/tmux/persist`).
 - Pane-contents capture is now **enabled by default** (set
   `@persist-capture-pane-contents 'off'` to disable).
+- Trailing blank lines are trimmed from captured pane contents, including
+  escape-only prompt redraws, so exiting a shell with `Ctrl-d` no longer leaves
+  a block of empty lines in the snapshot.
 - **Auto-save on exit.** Sessions are saved automatically on the
   `client-detached` and `session-closed` tmux hooks (covers detaching,
   disconnecting and exiting). Disable with `@persist-save-on-exit 'off'`.

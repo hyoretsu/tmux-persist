@@ -147,8 +147,10 @@ capture_pane_contents() {
 		if [ "$pane_contents_area" = "visible" ]; then
 			start_line="0"
 		fi
-		# the printf hack below removes *trailing* empty lines
-		printf '%s\n' "$(tmux capture-pane -epJ -S "$start_line" -t "$pane_id")" > "$(pane_contents_file "save" "$pane_id")"
+		# Drop trailing blank lines (incl. escape-only prompt redraws) so a
+		# Ctrl-d exit doesn't leave a gap of empty lines in the snapshot.
+		tmux capture-pane -epJ -S "$start_line" -t "$pane_id" |
+			strip_trailing_blank_lines > "$(pane_contents_file "save" "$pane_id")"
 	fi
 }
 

@@ -73,6 +73,22 @@ capture_pane_contents_option_on() {
 	[ "$option" == "on" ]
 }
 
+# Strips trailing lines that are only escape sequences and/or whitespace (e.g.
+# the blank prompt redraw left after exiting a shell with Ctrl-d). Lines that are
+# kept keep their escapes; interior blank lines are preserved.
+strip_trailing_blank_lines() {
+	awk -v esc="$(printf '\033')" '
+		function visible(s) {
+			gsub(esc "\\[[0-9;?]*[ -/]*[@-~]", "", s)   # CSI escapes (colors, cursor moves)
+			gsub(esc "\\][^\007]*\007", "", s)           # OSC escapes (e.g. window titles)
+			gsub(/[ \t]+$/, "", s)
+			return s
+		}
+		{ lines[NR] = $0; if (visible($0) != "") last = NR }
+		END { for (i = 1; i <= last; i++) print lines[i] }
+	'
+}
+
 files_differ() {
 	! cmp -s "$1" "$2"
 }

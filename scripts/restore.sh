@@ -20,6 +20,10 @@ RESTORING_FROM_SCRATCH="false"
 
 RESTORE_PANE_CONTENTS="false"
 
+# Path to the extracted layout file of the snapshot being restored. Set once the
+# snapshot is unpacked in restore_all_panes.
+RESTORE_LAYOUT_FILE=""
+
 # Arguments (any order):
 #   quiet      - produce no output and no "file not found" message (used by the
 #                auto-restore hook, which fires for every new session)
@@ -260,8 +264,10 @@ detect_if_restoring_from_scratch() {
 	fi
 }
 
+# Restore pane contents whenever the extracted snapshot actually carries any -
+# independent of the current capture option, so old snapshots still restore.
 detect_if_restoring_pane_contents() {
-	if capture_pane_contents_option_on; then
+	if [ -n "$(find "$(persist_dir)/restore/pane_contents" -type f -print 2>/dev/null | head -1)" ]; then
 		cache_tmux_default_command
 		restore_pane_contents_true
 	fi
@@ -271,20 +277,20 @@ detect_if_restoring_pane_contents() {
 
 restore_all_panes() {
 	detect_if_restoring_from_scratch   # sets a global variable
+	# Unpack the snapshot (layout + pane contents) into the restore staging area.
+	snapshot_extract "$RESTORE_SESSION"
+	RESTORE_LAYOUT_FILE="$(snapshot_layout_file "restore")"
 	detect_if_restoring_pane_contents  # sets a global variable
-	if is_restoring_pane_contents; then
-		pane_content_files_restore_from_archive "$RESTORE_SESSION"
-	fi
 	while read line; do
 		if is_line_type "pane" "$line"; then
 			restore_pane "$line"
 		fi
-	done < $(last_session_file "$RESTORE_SESSION")
+	done < "$RESTORE_LAYOUT_FILE"
 }
 
 restore_window_properties() {
 	local window_name
-	\grep '^window' $(last_session_file "$RESTORE_SESSION") |
+	\grep '^window' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename; do
 			tmux select-layout -t "${session_name}:${window_number}" "$window_layout"
 
@@ -304,7 +310,7 @@ restore_window_properties() {
 restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
-		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' $(last_session_file "$RESTORE_SESSION") |
+		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
 			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
@@ -314,7 +320,7 @@ restore_all_pane_processes() {
 }
 
 restore_active_pane_for_each_window() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' $(last_session_file "$RESTORE_SESSION") |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number active_pane; do
 			tmux switch-client -t "${session_name}:${window_number}"
 			tmux select-pane -t "$active_pane"
@@ -322,7 +328,7 @@ restore_active_pane_for_each_window() {
 }
 
 restore_zoomed_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' $(last_session_file "$RESTORE_SESSION") |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number; do
 			tmux resize-pane -t "${session_name}:${window_number}" -Z
 		done
@@ -334,24 +340,22 @@ restore_grouped_sessions() {
 			restore_grouped_session "$line"
 			restore_active_and_alternate_windows_for_grouped_sessions "$line"
 		fi
-	done < $(last_session_file "$RESTORE_SESSION")
+	done < "$RESTORE_LAYOUT_FILE"
 }
 
 restore_active_and_alternate_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' $(last_session_file "$RESTORE_SESSION") |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
 		sort -u |
 		while IFS=$d read session_name active_window window_number; do
 			tmux switch-client -t "${session_name}:${window_number}"
 		done
 }
 
-# A cleanup that happens after 'restore_all_panes' seems to fix fish shell
-# users' restore problems.
+# Remove the restore staging tree (layout + any pane contents) once everything
+# has been recreated. Doing it after 'restore_all_panes' also seems to fix fish
+# shell users' restore problems.
 cleanup_restored_pane_contents() {
-	if is_restoring_pane_contents; then
-		# remove the whole staging tree, not just its files
-		rm -rf "$(persist_dir)/restore"
-	fi
+	rm -rf "$(persist_dir)/restore"
 }
 
 show_output() {

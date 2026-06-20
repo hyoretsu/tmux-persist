@@ -60,6 +60,14 @@ default_delete_backup_after="7" # days
 max_snapshots_option="@persist-max-snapshots"
 default_max_snapshots="0"
 
+# How a snapshot stores its layout and pane contents:
+#   'together'  - one file per snapshot, "<session>_<timestamp>.tgz"
+#   'separate'  - layout "<session>_<timestamp>.txt" plus a companion
+#                 "<session>_<timestamp>_pane_contents.tgz"
+# Restore auto-detects the format from the files, so this only affects new saves.
+snapshot_format_option="@persist-snapshot-format"
+default_snapshot_format="together"
+
 # Automatically save when a client detaches or a session is closed. This covers
 # detaching (prefix + d), disconnecting (terminal closed) and exiting a session
 # (Ctrl-d out of the last pane). Set to 'off' to disable.

@@ -230,37 +230,37 @@ dump_pane_contents() {
 		done
 }
 
-# Saves a single session to its own files, named "<session>_*".
+# Saves one session as a single snapshot file, "<session>_<timestamp>.tgz",
+# bundling its layout and (when enabled) its pane contents.
 save_session() {
 	local session="$1"
-	local session_file_path="$(session_file_path "$session")"
-	local last_session_file="$(last_session_file "$session")"
+	local layout_file="$(snapshot_layout_file "save")"
+
+	# Build the snapshot in the staging area: ./layout (+ ./pane_contents/).
+	rm -rf "$(persist_dir)/save"
+	mkdir -p "$(persist_dir)/save"
 
 	if is_session_grouped "$session"; then
 		# grouped sessions share the original session's layout, so we only
 		# record the grouping itself - never panes, windows or pane contents.
-		dump_grouped_session_line "$session" > "$session_file_path"
+		dump_grouped_session_line "$session" > "$layout_file"
 	else
 		{
 			dump_panes   "$session"
 			dump_windows "$session"
-		} > "$session_file_path"
+		} > "$layout_file"
+		if [ "$CAPTURE_PANE_CONTENTS" = "on" ]; then
+			mkdir -p "$(pane_contents_dir "save")"
+			dump_pane_contents "$session"
+		fi
 	fi
 
-	execute_hook "post-save-layout" "$session_file_path"
-	if files_differ "$session_file_path" "$last_session_file"; then
-		ln -fs "$(basename "$session_file_path")" "$last_session_file"
-	else
-		rm "$session_file_path"
-	fi
+	execute_hook "post-save-layout" "$layout_file"
 
-	if [ "$CAPTURE_PANE_CONTENTS" = "on" ] && ! is_session_grouped "$session"; then
-		mkdir -p "$(pane_contents_dir "save")"
-		dump_pane_contents "$session"
-		pane_contents_create_archive "$session"
-		# remove the whole staging tree, not just its files
-		rm -rf "$(persist_dir)/save"
-	fi
+	snapshot_create "$session"
+
+	# remove the whole staging tree, not just its files
+	rm -rf "$(persist_dir)/save"
 }
 
 save_all() {

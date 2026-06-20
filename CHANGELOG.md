@@ -1,6 +1,11 @@
 # Changelog
 
 ### tmux-persist fork
+- Pane contents are now stored **inside each snapshot** instead of one shared
+  per-session archive, so historical snapshots keep their own contents. New
+  `@persist-snapshot-format` chooses how: `together` (default; one
+  `<session>_<timestamp>.tgz`) or `separate` (a `.txt` layout plus a
+  `_pane_contents.tgz` companion). Restore auto-detects the format.
 - Added `@persist-max-snapshots` to cap how many snapshots each session keeps
   (newest kept; default `0` = unlimited). Composes with age-based pruning.
 - Snapshot retention is now purely age-based: snapshots older than

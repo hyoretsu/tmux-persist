@@ -122,6 +122,10 @@ You should now be able to use the plugin.
 - Optionally cap how many snapshots each session keeps with
   `set -g @persist-max-snapshots '<n>'` (default `0` = unlimited). Extras beyond
   the newest `n` are erased regardless of age.
+- Each snapshot bundles its layout and pane contents in one file by default.
+  Store them apart with `set -g @persist-snapshot-format 'separate'`. See
+  [restoring pane contents](docs/restoring_pane_contents.md) for what a snapshot
+  contains.
 
 **Optional features**
 

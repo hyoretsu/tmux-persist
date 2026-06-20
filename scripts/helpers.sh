@@ -6,7 +6,6 @@ fi
 persist_dir_option="@persist-dir"
 
 SUPPORTED_VERSION="1.9"
-PERSIST_FILE_EXTENSION="txt"
 _PERSIST_DIR=""
 
 d=$'\t'
@@ -78,20 +77,76 @@ is_session_grouped() {
 
 # pane content file helpers
 
-pane_contents_create_archive() {
-	local session="$1"
-	tar cf - -C "$(persist_dir)/save/" ./pane_contents/ |
-		gzip > "$(pane_contents_archive_file "$session")"
+# A snapshot stores a session's layout and (optionally) its pane contents. Two
+# on-disk formats share one interface, selected by @persist-snapshot-format:
+#   together  - one file: "<session>_<timestamp>.tgz" holding ./layout and
+#               ./pane_contents/
+#   separate  - "<session>_<timestamp>.txt" (layout) plus a companion
+#               "<session>_<timestamp>_pane_contents.tgz" (pane contents)
+# Saving/staging always happens under "<persist-dir>/{save,restore}/" as a
+# ./layout file and a ./pane_contents/ dir; only snapshot_create/snapshot_extract
+# know the format. Restore detects the format from the files, so a snapshot saved
+# either way always restores.
+
+snapshot_format() {
+	get_tmux_option "$snapshot_format_option" "$default_snapshot_format"
 }
 
-pane_content_files_restore_from_archive() {
+# File extension of the primary snapshot file for a new save.
+snapshot_extension() {
+	if [ "$(snapshot_format)" = "separate" ]; then echo "txt"; else echo "tgz"; fi
+}
+
+snapshot_layout_file() {
+	# $1 = save | restore
+	echo "$(persist_dir)/$1/layout"
+}
+
+# Companion pane-contents file for a separate-format snapshot, derived from the
+# primary file path: "<...>_<ts>.txt" -> "<...>_<ts>_pane_contents.tgz".
+snapshot_companion_file() {
+	echo "${1%.*}_pane_contents.tgz"
+}
+
+# Writes the staged ./layout (+ ./pane_contents/) out as a snapshot, in the
+# configured format, and points the session's "last" symlink at it.
+snapshot_create() {
 	local session="$1"
-	local archive_file="$(pane_contents_archive_file "$session")"
-	if [ -f "$archive_file" ]; then
-		mkdir -p "$(pane_contents_dir "restore")"
-		gzip -d < "$archive_file" |
-			tar xf - -C "$(persist_dir)/restore/"
+	local primary="$(session_file_path "$session")"
+	local staging="$(persist_dir)/save"
+	if [ "$(snapshot_format)" = "separate" ]; then
+		cp "$staging/layout" "$primary"
+		if [ -n "$(find "$staging/pane_contents" -type f -print 2>/dev/null | head -1)" ]; then
+			tar czf "$(snapshot_companion_file "$primary")" -C "$staging" ./pane_contents
+		fi
+	else
+		tar czf "$primary" -C "$staging" .
 	fi
+	ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+}
+
+# Populates the restore staging area (./layout, ./pane_contents/) from a
+# session's latest snapshot, auto-detecting the on-disk format.
+snapshot_extract() {
+	local session="$1"
+	local last="$(last_session_file "$session")"
+	rm -rf "$(persist_dir)/restore"
+	[ -e "$last" ] || return
+	mkdir -p "$(persist_dir)/restore"
+	local target="$(readlink "$last")"
+	case "$target" in
+		*.tgz)
+			# together: one tarball with ./layout and ./pane_contents/
+			tar xzf "$last" -C "$(persist_dir)/restore" 2>/dev/null
+			;;
+		*)
+			# separate (or a plain layout file): copy the layout, then unpack the
+			# companion pane-contents archive if present.
+			cp "$last" "$(persist_dir)/restore/layout"
+			local companion="$(persist_dir)/$(snapshot_companion_file "$target")"
+			[ -f "$companion" ] && tar xzf "$companion" -C "$(persist_dir)/restore" 2>/dev/null
+			;;
+	esac
 }
 
 # path helpers
@@ -110,11 +165,11 @@ _PERSIST_DIR="$(persist_dir)"
 # A single timestamp shared by every session saved in one save run.
 _PERSIST_TIMESTAMP="$(date +"%Y%m%dT%H%M%S")"
 
-# Per-session layout snapshot, e.g. "<persist-dir>/cubari_20260619T182833.txt".
+# Per-session snapshot file, e.g. "<persist-dir>/cubari_20260619T182833.tgz".
 # The session name is the file's prefix so each session is stored separately.
 session_file_path() {
 	local session="$1"
-	echo "$(persist_dir)/${session}_${_PERSIST_TIMESTAMP}.${PERSIST_FILE_EXTENSION}"
+	echo "$(persist_dir)/${session}_${_PERSIST_TIMESTAMP}.$(snapshot_extension)"
 }
 
 # Symlink pointing at the latest snapshot for a session, e.g.
@@ -139,25 +194,20 @@ pane_contents_file_exists() {
 	[ -f "$(pane_contents_file "restore" "$pane_id")" ]
 }
 
-# Per-session pane-contents archive, e.g. "<persist-dir>/cubari_pane_contents.tar.gz".
-pane_contents_archive_file() {
-	local session="$1"
-	echo "$(persist_dir)/${session}_pane_contents.tar.gz"
-}
-
 # Erase a session's stale snapshots. A snapshot is removed if it is older than
 # @persist-delete-backup-after days, or if it is beyond the newest
 # @persist-max-snapshots (0 = unlimited). The timestamp glob is shaped exactly
 # (????????T??????) so a session named "a" is never confused with "a_b". If
 # every snapshot is removed the "last" symlink ends up dangling, meaning the
-# whole session is stale - so its pointer and pane-contents archive are dropped
-# too.
+# whole session is stale - so its pointer is dropped too.
 remove_old_backups() {
 	local session="$1"
 	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
 	local max_snapshots="$(get_tmux_option "$max_snapshots_option" "$default_max_snapshots")"
 	shopt -s nullglob
-	local -a snapshots=( "$(persist_dir)/${session}_"????????T??????".${PERSIST_FILE_EXTENSION}" )
+	# Primary snapshot files only ("<session>_<ts>.<ext>"); the exact timestamp
+	# glob excludes the "_pane_contents.tgz" companions and never matches "a_b".
+	local -a snapshots=( "$(persist_dir)/${session}_"????????T??????"."* )
 	# Sort newest first. The filenames share a prefix and end in a sortable
 	# timestamp, so a plain reverse string sort is chronological.
 	if [ "${#snapshots[@]}" -gt 1 ]; then
@@ -174,12 +224,15 @@ remove_old_backups() {
 		if [ "$max_snapshots" -gt 0 ] 2>/dev/null && [ "$i" -ge "$max_snapshots" ]; then
 			delete="true"
 		fi
-		[ "$delete" = "true" ] && rm -f "$snapshot"
+		if [ "$delete" = "true" ]; then
+			# remove the primary and its pane-contents companion (if any)
+			rm -f "$snapshot" "$(snapshot_companion_file "$snapshot")"
+		fi
 		i=$((i + 1))
 	done
 	local last_link="$(last_session_file "$session")"
 	if [ -L "$last_link" ] && [ ! -e "$last_link" ]; then
-		rm -f "$last_link" "$(pane_contents_archive_file "$session")"
+		rm -f "$last_link"
 	fi
 }
 

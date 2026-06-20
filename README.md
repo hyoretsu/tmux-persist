@@ -119,6 +119,9 @@ You should now be able to use the plugin.
   with `set -g @persist-delete-backup-after '<days>'`. When all of a session's
   snapshots expire, the session is forgotten entirely (its `last` pointer and
   pane contents go too).
+- Optionally cap how many snapshots each session keeps with
+  `set -g @persist-max-snapshots '<n>'` (default `0` = unlimited). Extras beyond
+  the newest `n` are erased regardless of age.
 
 **Optional features**
 

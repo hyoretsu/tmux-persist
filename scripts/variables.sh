@@ -55,6 +55,11 @@ hook_prefix="@persist-hook-"
 delete_backup_after_option="@persist-delete-backup-after"
 default_delete_backup_after="7" # days
 
+# Keep at most this many snapshots per session (the newest ones). Older extras
+# are erased regardless of age. 0 means unlimited (only age-based pruning).
+max_snapshots_option="@persist-max-snapshots"
+default_max_snapshots="0"
+
 # Automatically save when a client detaches or a session is closed. This covers
 # detaching (prefix + d), disconnecting (terminal closed) and exiting a session
 # (Ctrl-d out of the last pane). Set to 'off' to disable.

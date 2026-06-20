@@ -1,6 +1,8 @@
 # Changelog
 
 ### tmux-persist fork
+- Added `@persist-max-snapshots` to cap how many snapshots each session keeps
+  (newest kept; default `0` = unlimited). Composes with age-based pruning.
 - Snapshot retention is now purely age-based: snapshots older than
   `@persist-delete-backup-after` days (default **7**, was 30 with a 5-copy
   floor) are erased automatically on save and on server start. When all of a

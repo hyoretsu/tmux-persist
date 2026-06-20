@@ -145,20 +145,37 @@ pane_contents_archive_file() {
 	echo "$(persist_dir)/${session}_pane_contents.tar.gz"
 }
 
-# Erase a session's snapshots older than @persist-delete-backup-after days. The
-# timestamp glob is shaped exactly (????????T??????) so a session named "a" is
-# never confused with "a_b". If every snapshot expires the "last" symlink ends
-# up dangling, meaning the whole session is stale - so its pointer and
-# pane-contents archive are dropped too.
+# Erase a session's stale snapshots. A snapshot is removed if it is older than
+# @persist-delete-backup-after days, or if it is beyond the newest
+# @persist-max-snapshots (0 = unlimited). The timestamp glob is shaped exactly
+# (????????T??????) so a session named "a" is never confused with "a_b". If
+# every snapshot is removed the "last" symlink ends up dangling, meaning the
+# whole session is stale - so its pointer and pane-contents archive are dropped
+# too.
 remove_old_backups() {
 	local session="$1"
 	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
+	local max_snapshots="$(get_tmux_option "$max_snapshots_option" "$default_max_snapshots")"
 	shopt -s nullglob
-	local snapshot
-	for snapshot in "$(persist_dir)/${session}_"????????T??????".${PERSIST_FILE_EXTENSION}"; do
-		if [ -n "$(find "$snapshot" -mtime "+${delete_after}" -print 2>/dev/null)" ]; then
-			rm -f "$snapshot"
+	local -a snapshots=( "$(persist_dir)/${session}_"????????T??????".${PERSIST_FILE_EXTENSION}" )
+	# Sort newest first. The filenames share a prefix and end in a sortable
+	# timestamp, so a plain reverse string sort is chronological.
+	if [ "${#snapshots[@]}" -gt 1 ]; then
+		local oldifs="$IFS"; IFS=$'\n'
+		snapshots=( $(printf '%s\n' "${snapshots[@]}" | sort -r) )
+		IFS="$oldifs"
+	fi
+	local i=0 snapshot delete
+	for snapshot in "${snapshots[@]}"; do
+		delete="false"
+		# too old?
+		[ -n "$(find "$snapshot" -mtime "+${delete_after}" -print 2>/dev/null)" ] && delete="true"
+		# beyond the cap? (index 0 is the newest, so the latest is always kept)
+		if [ "$max_snapshots" -gt 0 ] 2>/dev/null && [ "$i" -ge "$max_snapshots" ]; then
+			delete="true"
 		fi
+		[ "$delete" = "true" ] && rm -f "$snapshot"
+		i=$((i + 1))
 	done
 	local last_link="$(last_session_file "$session")"
 	if [ -L "$last_link" ] && [ ! -e "$last_link" ]; then

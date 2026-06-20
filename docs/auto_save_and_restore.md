@@ -28,9 +28,20 @@ last detach or manual save).
 
 To save *at the moment of* `Ctrl-d`, save from the shell just before it exits,
 while the pane is still alive. This only saves; it does not change what `Ctrl-d`
-does. Add to your shell rc:
+does. Add the snippet for your shell to its rc file. `@persist-save-script-path`
+is set by the plugin, so you never hardcode the path.
 
-zsh (`~/.zshrc`):
+bash, ksh, dash, POSIX `sh` — `trap … EXIT` (`~/.bashrc`, `~/.kshrc`, `$ENV`):
+
+    if [ -n "$TMUX" ]; then
+      _persist_save_on_exit() {
+        script="$(tmux show-option -gqv @persist-save-script-path)"
+        [ -n "$script" ] && "$script" quiet "$(tmux display-message -p '#{client_session}')" >/dev/null 2>&1
+      }
+      trap _persist_save_on_exit EXIT
+    fi
+
+zsh (`~/.zshrc`) — uses the `zshexit` hook:
 
     if [ -n "$TMUX" ]; then
       zshexit() {
@@ -39,18 +50,17 @@ zsh (`~/.zshrc`):
       }
     fi
 
-bash (`~/.bashrc`):
+fish (`~/.config/fish/config.fish`) — uses the `fish_exit` event:
 
-    if [ -n "$TMUX" ]; then
-      _persist_save_on_exit() {
-        local script; script="$(tmux show-option -gqv @persist-save-script-path)"
-        [ -n "$script" ] && "$script" quiet "$(tmux display-message -p '#{client_session}')" >/dev/null 2>&1
-      }
-      trap _persist_save_on_exit EXIT
-    fi
+    if set -q TMUX
+      function __persist_save_on_exit --on-event fish_exit
+        set -l script (tmux show-option -gqv @persist-save-script-path)
+        test -n "$script"; and "$script" quiet (tmux display-message -p '#{client_session}') >/dev/null 2>&1
+      end
+    end
 
-`@persist-save-script-path` is set by the plugin, so you don't have to hardcode
-the path.
+`csh`/`tcsh` have no exit hook, so this trick is not possible there; rely on the
+detach/disconnect auto-save instead.
 
 ## Auto-restore on session creation
 

@@ -12,8 +12,11 @@ Issues are sorted into four buckets:
 - **A2 — Not reproducible:** the scenario can no longer occur (the offending
   feature was removed), so the report is moot. No work.
 - **B — Reproducible & fixable:** a real defect still present in the fork,
-  classified **Easy / Medium / Hard**.
+  classified **Easy / Medium / Hard**. Tracked as issues in the
+  [Tmux Resurrect Upstream Issues](https://github.com/users/hyoretsu/projects/9)
+  project — see the [mapping table](#upstream--fork-issue-mapping) below.
 - **C — Not a bug:** questions, feature requests, docs, or by-design limits.
+  Feature requests are tracked in the same project.
 
 > **Method & caveat.** Reproducibility was judged by **reading the fork's
 > code**, not by running each reproduction. Items tagged `(verify)` still need a
@@ -80,109 +83,7 @@ No fix to make; the report is simply moot.
 
 ---
 
-## Bucket B — Reproducible & fixable
-
-### Easy — localized change
-
-| Issue | Bug | Fix sketch |
-|---|---|---|
-| [561](https://github.com/tmux-plugins/tmux-resurrect/issues/561) | persist dir is world-readable (`mkdir -p`, no chmod) | `chmod 0700` after mkdir in the dir helper |
-| [497](https://github.com/tmux-plugins/tmux-resurrect/issues/497) | non-bash login shell not invoked (only bash gets `-l`) | extend `cache_tmux_default_command` `-l` logic to zsh/fish |
-| [548](https://github.com/tmux-plugins/tmux-resurrect/issues/548) | a space in `$HOME`/path breaks restore | `dump_panes` `sed 's/ /\\ /'` lacks the `g` flag; escape all spaces + quote the dir |
-| [415](https://github.com/tmux-plugins/tmux-resurrect/issues/415) | session named `''` fails to restore | validate / skip empty session name on save |
-| [323](https://github.com/tmux-plugins/tmux-resurrect/issues/323) | `vi` not resurrected (only `vim` matches) | add `vi` to the default proc list / vim strategy |
-| [485](https://github.com/tmux-plugins/tmux-resurrect/issues/485) | restore into a deleted dir silently lands in `$HOME` | fall back to nearest existing parent (optionally create) |
-
-### Medium — moderate, one subsystem
-
-| Issue(s) | Bug | Area |
-|---|---|---|
-| [543](https://github.com/tmux-plugins/tmux-resurrect/issues/543) | window number taken from previous server | `new_session` base-index / move-window |
-| [563](https://github.com/tmux-plugins/tmux-resurrect/issues/563), [492](https://github.com/tmux-plugins/tmux-resurrect/issues/492), [65](https://github.com/tmux-plugins/tmux-resurrect/issues/65) | stacked / minimal / uneven panes after restore | `new_pane` `resize -U 999` hack vs `select-layout` ordering |
-| [438](https://github.com/tmux-plugins/tmux-resurrect/issues/438), [363](https://github.com/tmux-plugins/tmux-resurrect/issues/363) | window name starting with a number / 7th-index misplacement | window-index parse + quoting |
-| [482](https://github.com/tmux-plugins/tmux-resurrect/issues/482), [254](https://github.com/tmux-plugins/tmux-resurrect/issues/254), [159](https://github.com/tmux-plugins/tmux-resurrect/issues/159) | wrong PWD when cwd is a symlink / `$HOME` link | option to keep logical path vs resolved |
-| [277](https://github.com/tmux-plugins/tmux-resurrect/issues/277), [205](https://github.com/tmux-plugins/tmux-resurrect/issues/205), [439](https://github.com/tmux-plugins/tmux-resurrect/issues/439) | `$CWD` taken from the vim child, not the shell | use the pane shell cwd in `dump_panes` |
-| [90](https://github.com/tmux-plugins/tmux-resurrect/issues/90), [364](https://github.com/tmux-plugins/tmux-resurrect/issues/364), [336](https://github.com/tmux-plugins/tmux-resurrect/issues/336), [477](https://github.com/tmux-plugins/tmux-resurrect/issues/477) | new windows inherit first window's path / wrong session cwd | set session working dir correctly on restore |
-| [530](https://github.com/tmux-plugins/tmux-resurrect/issues/530) | neovim AppImage path under `/tmp` | process-path rewrite strategy |
-| [517](https://github.com/tmux-plugins/tmux-resurrect/issues/517), [508](https://github.com/tmux-plugins/tmux-resurrect/issues/508) | `split-window <cmd>` / `echo;ssh` — child command lost | capture the full child command, not just the first proc |
-| [470](https://github.com/tmux-plugins/tmux-resurrect/issues/470), [421](https://github.com/tmux-plugins/tmux-resurrect/issues/421), [274](https://github.com/tmux-plugins/tmux-resurrect/issues/274), [326](https://github.com/tmux-plugins/tmux-resurrect/issues/326), [119](https://github.com/tmux-plugins/tmux-resurrect/issues/119), [356](https://github.com/tmux-plugins/tmux-resurrect/issues/356) | vim/nvim session not restored / sizing / `^M` / insert-mode | `vim_session.sh` / `nvim_session.sh` + restore timing |
-| [223](https://github.com/tmux-plugins/tmux-resurrect/issues/223) | vim in a split not sized (neovim) | `select-layout` after process spawn / refresh |
-| [353](https://github.com/tmux-plugins/tmux-resurrect/issues/353), [391](https://github.com/tmux-plugins/tmux-resurrect/issues/391) | wrong binary path / match whole path not basename | basename-limited process matching |
-| [403](https://github.com/tmux-plugins/tmux-resurrect/issues/403), [115](https://github.com/tmux-plugins/tmux-resurrect/issues/115) | corrupted / 0-length snapshot leaves a bad `last` | atomic save: validate staging before `snapshot_create` updates `last` |
-| [189](https://github.com/tmux-plugins/tmux-resurrect/issues/189) | `#S` / window name stuck after restore | `automatic-rename` reapply |
-| [309](https://github.com/tmux-plugins/tmux-resurrect/issues/309) | restore can clobber state with no confirm/snapshot | pre-restore safety snapshot |
-| [132](https://github.com/tmux-plugins/tmux-resurrect/issues/132) | window options not restored (e.g. `monitor-activity`) | extend `dump_windows` / restore |
-| [365](https://github.com/tmux-plugins/tmux-resurrect/issues/365), [207](https://github.com/tmux-plugins/tmux-resurrect/issues/207) | no per-socket (`-L`) separation | namespace snapshots by socket |
-| [388](https://github.com/tmux-plugins/tmux-resurrect/issues/388) | session/window index vs name order on restore | ordering pass |
-| [471](https://github.com/tmux-plugins/tmux-resurrect/issues/471) | unicode (Greek) window name breaks save deletion | filename / pruning safety for non-ASCII |
-| [555](https://github.com/tmux-plugins/tmux-resurrect/issues/555) | CWD resets to `$HOME` on pane-contents restore (dup-prompt half already fixed) | dir handling in the `pane_creation_command` path |
-
-### Hard — architectural / inherent to `ps`-capture / platform
-
-| Issue(s) | Theme |
-|---|---|
-| [540](https://github.com/tmux-plugins/tmux-resurrect/issues/540), [292](https://github.com/tmux-plugins/tmux-resurrect/issues/292), [499](https://github.com/tmux-plugins/tmux-resurrect/issues/499), [162](https://github.com/tmux-plugins/tmux-resurrect/issues/162), [60](https://github.com/tmux-plugins/tmux-resurrect/issues/60), [154](https://github.com/tmux-plugins/tmux-resurrect/issues/154), [440](https://github.com/tmux-plugins/tmux-resurrect/issues/440) | quote/escape/alias loss — `ps` argv is unquoted; needs `/proc/pid/cmdline` capture + re-quoting |
-| [338](https://github.com/tmux-plugins/tmux-resurrect/issues/338), [253](https://github.com/tmux-plugins/tmux-resurrect/issues/253), [158](https://github.com/tmux-plugins/tmux-resurrect/issues/158), [467](https://github.com/tmux-plugins/tmux-resurrect/issues/467), [418](https://github.com/tmux-plugins/tmux-resurrect/issues/418), [411](https://github.com/tmux-plugins/tmux-resurrect/issues/411), [108](https://github.com/tmux-plugins/tmux-resurrect/issues/108), [44](https://github.com/tmux-plugins/tmux-resurrect/issues/44) | PPID / process-name capture limits — external panes, suspended/bg, same-name-diff-cmd, nested launchers |
-| [544](https://github.com/tmux-plugins/tmux-resurrect/issues/544), [379](https://github.com/tmux-plugins/tmux-resurrect/issues/379), [383](https://github.com/tmux-plugins/tmux-resurrect/issues/383) | `capture-pane` / `ps.sh` CPU + hang on huge history / macOS sleep |
-| [535](https://github.com/tmux-plugins/tmux-resurrect/issues/535), [494](https://github.com/tmux-plugins/tmux-resurrect/issues/494) | restore needs an attached terminal (`switch-client`) — headless redesign |
-| [437](https://github.com/tmux-plugins/tmux-resurrect/issues/437), [304](https://github.com/tmux-plugins/tmux-resurrect/issues/304), [269](https://github.com/tmux-plugins/tmux-resurrect/issues/269), [280](https://github.com/tmux-plugins/tmux-resurrect/issues/280), [195](https://github.com/tmux-plugins/tmux-resurrect/issues/195) | pane-placement corruption / partial restore / large-monitor sizing |
-| [234](https://github.com/tmux-plugins/tmux-resurrect/issues/234), [134](https://github.com/tmux-plugins/tmux-resurrect/issues/134) | linked windows restored as separate windows |
-| [332](https://github.com/tmux-plugins/tmux-resurrect/issues/332), [456](https://github.com/tmux-plugins/tmux-resurrect/issues/456) | `$DISPLAY` / `TERM` / env not restored |
-| [473](https://github.com/tmux-plugins/tmux-resurrect/issues/473), [247](https://github.com/tmux-plugins/tmux-resurrect/issues/247), [131](https://github.com/tmux-plugins/tmux-resurrect/issues/131), [198](https://github.com/tmux-plugins/tmux-resurrect/issues/198), [123](https://github.com/tmux-plugins/tmux-resurrect/issues/123), [128](https://github.com/tmux-plugins/tmux-resurrect/issues/128), [293](https://github.com/tmux-plugins/tmux-resurrect/issues/293) | platform-specific (NixOS path churn, Cygwin `ps`/`pgrep`, Windows paths, sudo cwd) |
-| [559](https://github.com/tmux-plugins/tmux-resurrect/issues/559) | `kill-server` SIGHUP skips shell exit handlers (workflow / by-design mitigation) |
-| [290](https://github.com/tmux-plugins/tmux-resurrect/issues/290), [315](https://github.com/tmux-plugins/tmux-resurrect/issues/315) | non-login shells lose aliases/completion (intermittent; links to [497](https://github.com/tmux-plugins/tmux-resurrect/issues/497)) |
-| [237](https://github.com/tmux-plugins/tmux-resurrect/issues/237) | a corrupt pane-contents tar aborts the whole restore — needs per-pane fault isolation |
-| [374](https://github.com/tmux-plugins/tmux-resurrect/issues/374) | default apps reset after first resurrect (obscure; investigate before fixing) |
-
----
-
 ## Bucket C — Not a bug
-
-### Feature requests (potential roadmap, not defects)
-
-| Issue | Summary |
-|---|---|
-| [552](https://github.com/tmux-plugins/tmux-resurrect/issues/552) | Save, delete, and restore individual sessions |
-| [542](https://github.com/tmux-plugins/tmux-resurrect/issues/542) | Keep state files in `$XDG_STATE_HOME`, not `$XDG_DATA_HOME` |
-| [539](https://github.com/tmux-plugins/tmux-resurrect/issues/539) | Restore without attaching / control which session attaches |
-| [516](https://github.com/tmux-plugins/tmux-resurrect/issues/516) | Restore the open file in the `nnn` file manager |
-| [515](https://github.com/tmux-plugins/tmux-resurrect/issues/515) | Bind save/restore to a non-prefix client key table (`-T`) |
-| [498](https://github.com/tmux-plugins/tmux-resurrect/issues/498) | Create sessions/windows/layouts from a declarative file |
-| [484](https://github.com/tmux-plugins/tmux-resurrect/issues/484) | Save & restore window/session env variables |
-| [479](https://github.com/tmux-plugins/tmux-resurrect/issues/479) | Resurrect only named sessions |
-| [466](https://github.com/tmux-plugins/tmux-resurrect/issues/466) | Remove/unsave a session from the resurrect list |
-| [433](https://github.com/tmux-plugins/tmux-resurrect/issues/433) | Restore a program piped into another (e.g. `\| grep`) |
-| [428](https://github.com/tmux-plugins/tmux-resurrect/issues/428) | Linux CRIU checkpoint/restore of live processes |
-| [424](https://github.com/tmux-plugins/tmux-resurrect/issues/424) | Save to / load from a user-specified file |
-| [417](https://github.com/tmux-plugins/tmux-resurrect/issues/417) | Save & restore the bash directory stack (`pushd`/`popd`) |
-| [410](https://github.com/tmux-plugins/tmux-resurrect/issues/410) | Log resurrect actions to ease troubleshooting |
-| [407](https://github.com/tmux-plugins/tmux-resurrect/issues/407) | Restore only the active pane of a window |
-| [402](https://github.com/tmux-plugins/tmux-resurrect/issues/402) | Restore a docker-container launch command |
-| [385](https://github.com/tmux-plugins/tmux-resurrect/issues/385) | Explicitly remove/unsave a session before killing it |
-| [382](https://github.com/tmux-plugins/tmux-resurrect/issues/382) | Match restorable processes by prefix/regex |
-| [380](https://github.com/tmux-plugins/tmux-resurrect/issues/380) | Safe mode: store commands but don't auto-run them |
-| [368](https://github.com/tmux-plugins/tmux-resurrect/issues/368) | Let `bashrc` detect a resurrect-started shell |
-| [357](https://github.com/tmux-plugins/tmux-resurrect/issues/357) | Wildcard restore of commands / restore a single window |
-| [351](https://github.com/tmux-plugins/tmux-resurrect/issues/351) | Remember per-pane colors |
-| [312](https://github.com/tmux-plugins/tmux-resurrect/issues/312) | Save arbitrary pane metadata (env vars) — external plugin |
-| [306](https://github.com/tmux-plugins/tmux-resurrect/issues/306) | Length limit for pane-contents capture on huge history |
-| [299](https://github.com/tmux-plugins/tmux-resurrect/issues/299) | In-terminal apps (e.g. `mutt`) restoring — process config |
-| [264](https://github.com/tmux-plugins/tmux-resurrect/issues/264) | `@resurrect-processes` ssh restore — config |
-| [249](https://github.com/tmux-plugins/tmux-resurrect/issues/249) | Save NERDTree (vim plugin) state |
-| [246](https://github.com/tmux-plugins/tmux-resurrect/issues/246) | Set `resurrect-dir` dynamically per project |
-| [241](https://github.com/tmux-plugins/tmux-resurrect/issues/241) | Disable loading vim by default — config |
-| [240](https://github.com/tmux-plugins/tmux-resurrect/issues/240) | Restore a python virtualenv |
-| [235](https://github.com/tmux-plugins/tmux-resurrect/issues/235) | Env var so programs can detect they're being resurrected |
-| [213](https://github.com/tmux-plugins/tmux-resurrect/issues/213) | Run a command after a session is resurrected |
-| [208](https://github.com/tmux-plugins/tmux-resurrect/issues/208) | Restore `tmux clock-mode` in a dedicated pane |
-| [199](https://github.com/tmux-plugins/tmux-resurrect/issues/199) | tmuxinator-style run-command-per-pane |
-| [190](https://github.com/tmux-plugins/tmux-resurrect/issues/190) | Use `$HOME` for portable paths across machines |
-| [187](https://github.com/tmux-plugins/tmux-resurrect/issues/187) | Enter a VM (`lxc-attach`/`pct enter`) on restore |
-| [178](https://github.com/tmux-plugins/tmux-resurrect/issues/178) | One tmux instance per GNU screen window (multi-server) |
-| [171](https://github.com/tmux-plugins/tmux-resurrect/issues/171) | Restore a remote vim session over ssh |
-| [166](https://github.com/tmux-plugins/tmux-resurrect/issues/166) | Save the directory-change history list |
-| [106](https://github.com/tmux-plugins/tmux-resurrect/issues/106) | Add file managers to the default program list |
-| [81](https://github.com/tmux-plugins/tmux-resurrect/issues/81) | Tracking issue: improving the pane-contents feature |
 
 ### Questions / support / config / user-error
 
@@ -245,4 +146,142 @@ No fix to make; the report is simply moot.
 | [355](https://github.com/tmux-plugins/tmux-resurrect/issues/355) | sshfs-mounted folders unavailable at restore time |
 | [301](https://github.com/tmux-plugins/tmux-resurrect/issues/301) | git prompt broken — restored pane contents are static text |
 | [179](https://github.com/tmux-plugins/tmux-resurrect/issues/179) | `tmux -CC` (iTerm) has no prefix key table |
+
+---
+
+## Upstream → fork issue mapping
+
+Bucket B bugs and C feature requests are tracked in the
+[Tmux Resurrect Upstream Issues](https://github.com/users/hyoretsu/projects/9)
+project. Multiple upstream issues sharing a theme are grouped under a single
+fork issue.
+
+| Upstream (tmux-resurrect) | Fork (tmux-persist) |
+|---|---|
+| [44](https://github.com/tmux-plugins/tmux-resurrect/issues/44) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [60](https://github.com/tmux-plugins/tmux-resurrect/issues/60) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [65](https://github.com/tmux-plugins/tmux-resurrect/issues/65) | [#10](https://github.com/hyoretsu/tmux-persist/issues/10) |
+| [81](https://github.com/tmux-plugins/tmux-resurrect/issues/81) | [#80](https://github.com/hyoretsu/tmux-persist/issues/80) |
+| [90](https://github.com/tmux-plugins/tmux-resurrect/issues/90) | [#14](https://github.com/hyoretsu/tmux-persist/issues/14) |
+| [106](https://github.com/tmux-plugins/tmux-resurrect/issues/106) | [#79](https://github.com/hyoretsu/tmux-persist/issues/79) |
+| [108](https://github.com/tmux-plugins/tmux-resurrect/issues/108) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [115](https://github.com/tmux-plugins/tmux-resurrect/issues/115) | [#20](https://github.com/hyoretsu/tmux-persist/issues/20) |
+| [119](https://github.com/tmux-plugins/tmux-resurrect/issues/119) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [123](https://github.com/tmux-plugins/tmux-resurrect/issues/123) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [128](https://github.com/tmux-plugins/tmux-resurrect/issues/128) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [131](https://github.com/tmux-plugins/tmux-resurrect/issues/131) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [132](https://github.com/tmux-plugins/tmux-resurrect/issues/132) | [#23](https://github.com/hyoretsu/tmux-persist/issues/23) |
+| [134](https://github.com/tmux-plugins/tmux-resurrect/issues/134) | [#33](https://github.com/hyoretsu/tmux-persist/issues/33) |
+| [154](https://github.com/tmux-plugins/tmux-resurrect/issues/154) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [158](https://github.com/tmux-plugins/tmux-resurrect/issues/158) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [159](https://github.com/tmux-plugins/tmux-resurrect/issues/159) | [#12](https://github.com/hyoretsu/tmux-persist/issues/12) |
+| [162](https://github.com/tmux-plugins/tmux-resurrect/issues/162) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [166](https://github.com/tmux-plugins/tmux-resurrect/issues/166) | [#78](https://github.com/hyoretsu/tmux-persist/issues/78) |
+| [171](https://github.com/tmux-plugins/tmux-resurrect/issues/171) | [#77](https://github.com/hyoretsu/tmux-persist/issues/77) |
+| [178](https://github.com/tmux-plugins/tmux-resurrect/issues/178) | [#76](https://github.com/hyoretsu/tmux-persist/issues/76) |
+| [187](https://github.com/tmux-plugins/tmux-resurrect/issues/187) | [#75](https://github.com/hyoretsu/tmux-persist/issues/75) |
+| [189](https://github.com/tmux-plugins/tmux-resurrect/issues/189) | [#21](https://github.com/hyoretsu/tmux-persist/issues/21) |
+| [190](https://github.com/tmux-plugins/tmux-resurrect/issues/190) | [#74](https://github.com/hyoretsu/tmux-persist/issues/74) |
+| [195](https://github.com/tmux-plugins/tmux-resurrect/issues/195) | [#32](https://github.com/hyoretsu/tmux-persist/issues/32) |
+| [198](https://github.com/tmux-plugins/tmux-resurrect/issues/198) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [199](https://github.com/tmux-plugins/tmux-resurrect/issues/199) | [#73](https://github.com/hyoretsu/tmux-persist/issues/73) |
+| [205](https://github.com/tmux-plugins/tmux-resurrect/issues/205) | [#13](https://github.com/hyoretsu/tmux-persist/issues/13) |
+| [207](https://github.com/tmux-plugins/tmux-resurrect/issues/207) | [#24](https://github.com/hyoretsu/tmux-persist/issues/24) |
+| [208](https://github.com/tmux-plugins/tmux-resurrect/issues/208) | [#72](https://github.com/hyoretsu/tmux-persist/issues/72) |
+| [213](https://github.com/tmux-plugins/tmux-resurrect/issues/213) | [#71](https://github.com/hyoretsu/tmux-persist/issues/71) |
+| [223](https://github.com/tmux-plugins/tmux-resurrect/issues/223) | [#18](https://github.com/hyoretsu/tmux-persist/issues/18) |
+| [234](https://github.com/tmux-plugins/tmux-resurrect/issues/234) | [#33](https://github.com/hyoretsu/tmux-persist/issues/33) |
+| [235](https://github.com/tmux-plugins/tmux-resurrect/issues/235) | [#70](https://github.com/hyoretsu/tmux-persist/issues/70) |
+| [237](https://github.com/tmux-plugins/tmux-resurrect/issues/237) | [#39](https://github.com/hyoretsu/tmux-persist/issues/39) |
+| [240](https://github.com/tmux-plugins/tmux-resurrect/issues/240) | [#69](https://github.com/hyoretsu/tmux-persist/issues/69) |
+| [241](https://github.com/tmux-plugins/tmux-resurrect/issues/241) | [#68](https://github.com/hyoretsu/tmux-persist/issues/68) |
+| [246](https://github.com/tmux-plugins/tmux-resurrect/issues/246) | [#67](https://github.com/hyoretsu/tmux-persist/issues/67) |
+| [247](https://github.com/tmux-plugins/tmux-resurrect/issues/247) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [249](https://github.com/tmux-plugins/tmux-resurrect/issues/249) | [#66](https://github.com/hyoretsu/tmux-persist/issues/66) |
+| [253](https://github.com/tmux-plugins/tmux-resurrect/issues/253) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [254](https://github.com/tmux-plugins/tmux-resurrect/issues/254) | [#12](https://github.com/hyoretsu/tmux-persist/issues/12) |
+| [264](https://github.com/tmux-plugins/tmux-resurrect/issues/264) | [#65](https://github.com/hyoretsu/tmux-persist/issues/65) |
+| [269](https://github.com/tmux-plugins/tmux-resurrect/issues/269) | [#32](https://github.com/hyoretsu/tmux-persist/issues/32) |
+| [274](https://github.com/tmux-plugins/tmux-resurrect/issues/274) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [277](https://github.com/tmux-plugins/tmux-resurrect/issues/277) | [#13](https://github.com/hyoretsu/tmux-persist/issues/13) |
+| [280](https://github.com/tmux-plugins/tmux-resurrect/issues/280) | [#32](https://github.com/hyoretsu/tmux-persist/issues/32) |
+| [290](https://github.com/tmux-plugins/tmux-resurrect/issues/290) | [#38](https://github.com/hyoretsu/tmux-persist/issues/38) |
+| [292](https://github.com/tmux-plugins/tmux-resurrect/issues/292) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [293](https://github.com/tmux-plugins/tmux-resurrect/issues/293) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [299](https://github.com/tmux-plugins/tmux-resurrect/issues/299) | [#64](https://github.com/hyoretsu/tmux-persist/issues/64) |
+| [304](https://github.com/tmux-plugins/tmux-resurrect/issues/304) | [#32](https://github.com/hyoretsu/tmux-persist/issues/32) |
+| [306](https://github.com/tmux-plugins/tmux-resurrect/issues/306) | [#63](https://github.com/hyoretsu/tmux-persist/issues/63) |
+| [309](https://github.com/tmux-plugins/tmux-resurrect/issues/309) | [#22](https://github.com/hyoretsu/tmux-persist/issues/22) |
+| [312](https://github.com/tmux-plugins/tmux-resurrect/issues/312) | [#34](https://github.com/hyoretsu/tmux-persist/issues/34) |
+| [315](https://github.com/tmux-plugins/tmux-resurrect/issues/315) | [#38](https://github.com/hyoretsu/tmux-persist/issues/38) |
+| [323](https://github.com/tmux-plugins/tmux-resurrect/issues/323) | [#7](https://github.com/hyoretsu/tmux-persist/issues/7) |
+| [326](https://github.com/tmux-plugins/tmux-resurrect/issues/326) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [332](https://github.com/tmux-plugins/tmux-resurrect/issues/332) | [#34](https://github.com/hyoretsu/tmux-persist/issues/34) |
+| [336](https://github.com/tmux-plugins/tmux-resurrect/issues/336) | [#14](https://github.com/hyoretsu/tmux-persist/issues/14) |
+| [338](https://github.com/tmux-plugins/tmux-resurrect/issues/338) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [351](https://github.com/tmux-plugins/tmux-resurrect/issues/351) | [#62](https://github.com/hyoretsu/tmux-persist/issues/62) |
+| [353](https://github.com/tmux-plugins/tmux-resurrect/issues/353) | [#19](https://github.com/hyoretsu/tmux-persist/issues/19) |
+| [356](https://github.com/tmux-plugins/tmux-resurrect/issues/356) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [357](https://github.com/tmux-plugins/tmux-resurrect/issues/357) | [#61](https://github.com/hyoretsu/tmux-persist/issues/61) |
+| [363](https://github.com/tmux-plugins/tmux-resurrect/issues/363) | [#11](https://github.com/hyoretsu/tmux-persist/issues/11) |
+| [364](https://github.com/tmux-plugins/tmux-resurrect/issues/364) | [#14](https://github.com/hyoretsu/tmux-persist/issues/14) |
+| [365](https://github.com/tmux-plugins/tmux-resurrect/issues/365) | [#24](https://github.com/hyoretsu/tmux-persist/issues/24) |
+| [368](https://github.com/tmux-plugins/tmux-resurrect/issues/368) | [#60](https://github.com/hyoretsu/tmux-persist/issues/60) |
+| [374](https://github.com/tmux-plugins/tmux-resurrect/issues/374) | [#40](https://github.com/hyoretsu/tmux-persist/issues/40) |
+| [379](https://github.com/tmux-plugins/tmux-resurrect/issues/379) | [#30](https://github.com/hyoretsu/tmux-persist/issues/30) |
+| [380](https://github.com/tmux-plugins/tmux-resurrect/issues/380) | [#59](https://github.com/hyoretsu/tmux-persist/issues/59) |
+| [382](https://github.com/tmux-plugins/tmux-resurrect/issues/382) | [#58](https://github.com/hyoretsu/tmux-persist/issues/58) |
+| [383](https://github.com/tmux-plugins/tmux-resurrect/issues/383) | [#30](https://github.com/hyoretsu/tmux-persist/issues/30) |
+| [385](https://github.com/tmux-plugins/tmux-resurrect/issues/385) | [#57](https://github.com/hyoretsu/tmux-persist/issues/57) |
+| [388](https://github.com/tmux-plugins/tmux-resurrect/issues/388) | [#25](https://github.com/hyoretsu/tmux-persist/issues/25) |
+| [391](https://github.com/tmux-plugins/tmux-resurrect/issues/391) | [#19](https://github.com/hyoretsu/tmux-persist/issues/19) |
+| [402](https://github.com/tmux-plugins/tmux-resurrect/issues/402) | [#56](https://github.com/hyoretsu/tmux-persist/issues/56) |
+| [403](https://github.com/tmux-plugins/tmux-resurrect/issues/403) | [#20](https://github.com/hyoretsu/tmux-persist/issues/20) |
+| [407](https://github.com/tmux-plugins/tmux-resurrect/issues/407) | [#55](https://github.com/hyoretsu/tmux-persist/issues/55) |
+| [410](https://github.com/tmux-plugins/tmux-resurrect/issues/410) | [#54](https://github.com/hyoretsu/tmux-persist/issues/54) |
+| [411](https://github.com/tmux-plugins/tmux-resurrect/issues/411) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [415](https://github.com/tmux-plugins/tmux-resurrect/issues/415) | [#6](https://github.com/hyoretsu/tmux-persist/issues/6) |
+| [417](https://github.com/tmux-plugins/tmux-resurrect/issues/417) | [#53](https://github.com/hyoretsu/tmux-persist/issues/53) |
+| [418](https://github.com/tmux-plugins/tmux-resurrect/issues/418) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [421](https://github.com/tmux-plugins/tmux-resurrect/issues/421) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [424](https://github.com/tmux-plugins/tmux-resurrect/issues/424) | [#52](https://github.com/hyoretsu/tmux-persist/issues/52) |
+| [428](https://github.com/tmux-plugins/tmux-resurrect/issues/428) | [#51](https://github.com/hyoretsu/tmux-persist/issues/51) |
+| [433](https://github.com/tmux-plugins/tmux-resurrect/issues/433) | [#50](https://github.com/hyoretsu/tmux-persist/issues/50) |
+| [437](https://github.com/tmux-plugins/tmux-resurrect/issues/437) | [#32](https://github.com/hyoretsu/tmux-persist/issues/32) |
+| [438](https://github.com/tmux-plugins/tmux-resurrect/issues/438) | [#11](https://github.com/hyoretsu/tmux-persist/issues/11) |
+| [439](https://github.com/tmux-plugins/tmux-resurrect/issues/439) | [#13](https://github.com/hyoretsu/tmux-persist/issues/13) |
+| [440](https://github.com/tmux-plugins/tmux-resurrect/issues/440) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [456](https://github.com/tmux-plugins/tmux-resurrect/issues/456) | [#34](https://github.com/hyoretsu/tmux-persist/issues/34) |
+| [466](https://github.com/tmux-plugins/tmux-resurrect/issues/466) | [#49](https://github.com/hyoretsu/tmux-persist/issues/49) |
+| [467](https://github.com/tmux-plugins/tmux-resurrect/issues/467) | [#29](https://github.com/hyoretsu/tmux-persist/issues/29) |
+| [470](https://github.com/tmux-plugins/tmux-resurrect/issues/470) | [#17](https://github.com/hyoretsu/tmux-persist/issues/17) |
+| [471](https://github.com/tmux-plugins/tmux-resurrect/issues/471) | [#26](https://github.com/hyoretsu/tmux-persist/issues/26) |
+| [473](https://github.com/tmux-plugins/tmux-resurrect/issues/473) | [#36](https://github.com/hyoretsu/tmux-persist/issues/36) |
+| [477](https://github.com/tmux-plugins/tmux-resurrect/issues/477) | [#14](https://github.com/hyoretsu/tmux-persist/issues/14) |
+| [479](https://github.com/tmux-plugins/tmux-resurrect/issues/479) | [#48](https://github.com/hyoretsu/tmux-persist/issues/48) |
+| [482](https://github.com/tmux-plugins/tmux-resurrect/issues/482) | [#12](https://github.com/hyoretsu/tmux-persist/issues/12) |
+| [484](https://github.com/tmux-plugins/tmux-resurrect/issues/484) | [#47](https://github.com/hyoretsu/tmux-persist/issues/47) |
+| [485](https://github.com/tmux-plugins/tmux-resurrect/issues/485) | [#8](https://github.com/hyoretsu/tmux-persist/issues/8) |
+| [492](https://github.com/tmux-plugins/tmux-resurrect/issues/492) | [#10](https://github.com/hyoretsu/tmux-persist/issues/10) |
+| [494](https://github.com/tmux-plugins/tmux-resurrect/issues/494) | [#31](https://github.com/hyoretsu/tmux-persist/issues/31) |
+| [497](https://github.com/tmux-plugins/tmux-resurrect/issues/497) | [#4](https://github.com/hyoretsu/tmux-persist/issues/4) |
+| [498](https://github.com/tmux-plugins/tmux-resurrect/issues/498) | [#46](https://github.com/hyoretsu/tmux-persist/issues/46) |
+| [499](https://github.com/tmux-plugins/tmux-resurrect/issues/499) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [508](https://github.com/tmux-plugins/tmux-resurrect/issues/508) | [#16](https://github.com/hyoretsu/tmux-persist/issues/16) |
+| [515](https://github.com/tmux-plugins/tmux-resurrect/issues/515) | [#45](https://github.com/hyoretsu/tmux-persist/issues/45) |
+| [516](https://github.com/tmux-plugins/tmux-resurrect/issues/516) | [#44](https://github.com/hyoretsu/tmux-persist/issues/44) |
+| [517](https://github.com/tmux-plugins/tmux-resurrect/issues/517) | [#16](https://github.com/hyoretsu/tmux-persist/issues/16) |
+| [530](https://github.com/tmux-plugins/tmux-resurrect/issues/530) | [#15](https://github.com/hyoretsu/tmux-persist/issues/15) |
+| [535](https://github.com/tmux-plugins/tmux-resurrect/issues/535) | [#31](https://github.com/hyoretsu/tmux-persist/issues/31) |
+| [539](https://github.com/tmux-plugins/tmux-resurrect/issues/539) | [#43](https://github.com/hyoretsu/tmux-persist/issues/43) |
+| [540](https://github.com/tmux-plugins/tmux-resurrect/issues/540) | [#28](https://github.com/hyoretsu/tmux-persist/issues/28) |
+| [542](https://github.com/tmux-plugins/tmux-resurrect/issues/542) | [#42](https://github.com/hyoretsu/tmux-persist/issues/42) |
+| [543](https://github.com/tmux-plugins/tmux-resurrect/issues/543) | [#9](https://github.com/hyoretsu/tmux-persist/issues/9) |
+| [544](https://github.com/tmux-plugins/tmux-resurrect/issues/544) | [#30](https://github.com/hyoretsu/tmux-persist/issues/30) |
+| [548](https://github.com/tmux-plugins/tmux-resurrect/issues/548) | [#5](https://github.com/hyoretsu/tmux-persist/issues/5) |
+| [552](https://github.com/tmux-plugins/tmux-resurrect/issues/552) | [#41](https://github.com/hyoretsu/tmux-persist/issues/41) |
+| [555](https://github.com/tmux-plugins/tmux-resurrect/issues/555) | [#27](https://github.com/hyoretsu/tmux-persist/issues/27) |
+| [559](https://github.com/tmux-plugins/tmux-resurrect/issues/559) | [#37](https://github.com/hyoretsu/tmux-persist/issues/37) |
+| [561](https://github.com/tmux-plugins/tmux-resurrect/issues/561) | [#3](https://github.com/hyoretsu/tmux-persist/issues/3) |
+| [563](https://github.com/tmux-plugins/tmux-resurrect/issues/563) | [#10](https://github.com/hyoretsu/tmux-persist/issues/10) |
 </content>

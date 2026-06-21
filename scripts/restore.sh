@@ -51,11 +51,12 @@ is_line_type() {
 }
 
 check_saved_session_exists() {
-	local persist_file="$(last_session_file "$RESTORE_SESSION")"
-	if [ ! -f "$persist_file" ]; then
-		# In quiet mode (auto-restore on session creation) staying silent is
-		# expected: most new sessions have no saved snapshot.
-		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found!"
+	if ! snapshot_valid "$RESTORE_SESSION"; then
+		# Missing, dangling, or 0-byte (corrupt/interrupted) snapshot: skip the
+		# restore rather than feed tmux an empty file. In quiet mode (auto-restore
+		# on session creation) staying silent is expected: most new sessions have
+		# no saved snapshot.
+		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found or empty!"
 		return 1
 	fi
 }

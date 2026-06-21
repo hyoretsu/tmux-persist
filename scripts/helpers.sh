@@ -266,7 +266,25 @@ snapshot_create() {
 	else
 		tar czf "$primary" -C "$staging" .
 	fi
-	ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+	# Only repoint "last" at a non-empty snapshot. A 0-byte primary means the
+	# save was interrupted/failed (e.g. the tmux socket vanished mid-save); the
+	# previous good pointer must survive instead of being clobbered with a file
+	# that makes restore fail - and, on auto-restore, can make tmux exit
+	# immediately. (tmux-resurrect#115, #403)
+	if [ -s "$primary" ]; then
+		ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+	else
+		rm -f "$primary"
+	fi
+}
+
+# True if the session's "last" snapshot exists and is non-empty. A dangling
+# pointer or a 0-byte (corrupt/interrupted) snapshot is treated as no snapshot,
+# so restore skips gracefully instead of failing. (tmux-resurrect#403, #115)
+snapshot_valid() {
+	local session="$1"
+	local last="$(last_session_file "$session")"
+	[ -f "$last" ] && [ -s "$last" ]
 }
 
 # Populates the restore staging area (./layout, ./pane_contents/) from a

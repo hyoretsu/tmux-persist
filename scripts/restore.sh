@@ -198,6 +198,11 @@ new_pane() {
 restore_pane() {
 	local pane="$1"
 	while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
+		# Skip malformed lines with no session name. tmux rejects an empty name
+		# (`new-session -s ""` -> "invalid session"), so a crafted or pre-3.x
+		# snapshot carrying one would otherwise derail the whole restore.
+		# (tmux-resurrect#415)
+		[ -n "$session_name" ] || continue
 		dir="$(remove_first_char "$dir")"
 		pane_full_command="$(remove_first_char "$pane_full_command")"
 		if pane_exists "$session_name" "$window_number" "$pane_index"; then
@@ -292,6 +297,7 @@ restore_window_properties() {
 	local window_name
 	\grep '^window' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename; do
+			[ -n "$session_name" ] || continue   # skip nameless sessions (tmux-resurrect#415)
 			tmux select-layout -t "${session_name}:${window_number}" "$window_layout"
 
 			# Below steps are properly handling window names and automatic-rename
@@ -310,7 +316,7 @@ restore_window_properties() {
 restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
-		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
+		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
 			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
@@ -320,7 +326,7 @@ restore_all_pane_processes() {
 }
 
 restore_active_pane_for_each_window() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number active_pane; do
 			tmux switch-client -t "${session_name}:${window_number}"
 			tmux select-pane -t "$active_pane"
@@ -328,7 +334,7 @@ restore_active_pane_for_each_window() {
 }
 
 restore_zoomed_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number; do
 			tmux resize-pane -t "${session_name}:${window_number}" -Z
 		done
@@ -344,7 +350,7 @@ restore_grouped_sessions() {
 }
 
 restore_active_and_alternate_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $2 != "" && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
 		sort -u |
 		while IFS=$d read session_name active_window window_number; do
 			tmux switch-client -t "${session_name}:${window_number}"

@@ -1,12 +1,21 @@
+# Saved sessions are application *state* (layouts, open files), which per the
+# XDG base-dir spec belongs in $XDG_STATE_HOME, not $XDG_DATA_HOME. Existing
+# locations are still honoured first so no one's snapshots move; only a fresh
+# install defaults to the XDG state dir. (tmux-resurrect#542)
 if [ -d "$HOME/.tmux/persist" ]; then
         default_persist_dir="$HOME/.tmux/persist"
 elif [ -d "$HOME/.tmux/resurrect" ]; then
         # legacy tmux-resurrect directory, used if no persist dir exists yet
         default_persist_dir="$HOME/.tmux/resurrect"
+elif [ -d "${XDG_STATE_HOME:-$HOME/.local/state}/tmux/persist" ]; then
+        default_persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}"/tmux/persist
 elif [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect" ]; then
         default_persist_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/resurrect
-else
+elif [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/tmux/persist" ]; then
+        # existing fork installs that landed in the data dir keep working
         default_persist_dir="${XDG_DATA_HOME:-$HOME/.local/share}"/tmux/persist
+else
+        default_persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}"/tmux/persist
 fi
 persist_dir_option="@persist-dir"
 

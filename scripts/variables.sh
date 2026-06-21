@@ -8,8 +8,11 @@ restore_option="@persist-restore"
 restore_path_option="@persist-restore-script-path"
 
 # default processes that are restored
+# Includes common terminal file managers (ranger/nnn/lf/vifm/mc): they only
+# reopen a directory view and are safe to relaunch, in the spirit of restoring
+# navigators like less/more. (tmux-resurrect#106)
 default_proc_list_option="@persist-default-processes"
-default_proc_list='vi vim view nvim emacs man less more tail top htop irssi weechat mutt'
+default_proc_list='vi vim view nvim emacs man less more tail top htop irssi weechat mutt ranger nnn lf vifm mc'
 
 # User defined processes that are restored
 #  'false' - nothing is restored

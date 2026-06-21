@@ -68,6 +68,13 @@ default_max_snapshots="0"
 snapshot_format_option="@persist-snapshot-format"
 default_snapshot_format="together"
 
+# Skip writing a new snapshot when a session's content (layout + pane contents)
+# is byte-identical to its latest snapshot. The existing snapshot's mtime is
+# refreshed instead, so age-based pruning keeps it alive without piling up
+# duplicate files on every detach. Set to 'off' to always write a new snapshot.
+skip_unchanged_option="@persist-skip-unchanged"
+default_skip_unchanged="on"
+
 # Automatically save when a client detaches or a session is closed. This covers
 # detaching (prefix + d), disconnecting (terminal closed) and exiting a session
 # (Ctrl-d out of the last pane). Set to 'off' to disable.

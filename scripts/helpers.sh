@@ -252,12 +252,69 @@ snapshot_companion_file() {
 	echo "${1%.*}_pane_contents.tgz"
 }
 
+# Per-session sidecar storing the content hash of the latest snapshot, sibling
+# to the "<session>_last" symlink (e.g. "<session>_last.hash"). Used to skip
+# writing duplicate snapshots when content is unchanged.
+snapshot_hash_file() {
+	echo "$(last_session_file "$1").hash"
+}
+
+# Reads stdin and prints a content hash. Prefers sha1sum, then shasum (macOS),
+# falling back to POSIX cksum so the suite has no hard dependency on coreutils.
+hash_stdin() {
+	if command -v sha1sum >/dev/null 2>&1; then
+		sha1sum | cut -d' ' -f1
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum | cut -d' ' -f1
+	else
+		cksum | cut -d' ' -f1
+	fi
+}
+
+# Content hash of a staging tree (./layout + ./pane_contents/). Independent of
+# file mtimes and pane-file order, so identical session state hashes identically
+# across saves. Pane filenames are folded in so a pane remap counts as a change.
+snapshot_content_hash() {
+	local staging="$1"
+	{
+		printf 'layout\0'
+		cat "$staging/layout" 2>/dev/null
+		printf '\0'
+		if [ -d "$staging/pane_contents" ]; then
+			find "$staging/pane_contents" -type f 2>/dev/null | LC_ALL=C sort |
+				while IFS= read -r f; do
+					printf '%s\0' "${f#"$staging"/}"
+					cat "$f"
+					printf '\0'
+				done
+		fi
+	} | hash_stdin
+}
+
 # Writes the staged ./layout (+ ./pane_contents/) out as a snapshot, in the
 # configured format, and points the session's "last" symlink at it.
 snapshot_create() {
 	local session="$1"
 	local primary="$(session_file_path "$session")"
 	local staging="$(persist_dir)/save"
+	local hash_file="$(snapshot_hash_file "$session")"
+	local new_hash="$(snapshot_content_hash "$staging")"
+
+	# Skip writing a duplicate snapshot when content matches the latest one.
+	# Refresh the existing snapshot's mtime so age-based pruning keeps it alive,
+	# and leave the "last" pointer untouched.
+	if [ "$(get_tmux_option "$skip_unchanged_option" "$default_skip_unchanged")" = "on" ]; then
+		local last="$(last_session_file "$session")"
+		if [ -e "$last" ] && [ "$new_hash" = "$(cat "$hash_file" 2>/dev/null)" ]; then
+			local target="$(readlink "$last")"
+			touch -h "$last" 2>/dev/null
+			touch "$(persist_dir)/$target" 2>/dev/null
+			local companion="$(persist_dir)/$(snapshot_companion_file "$target")"
+			[ -f "$companion" ] && touch "$companion"
+			return
+		fi
+	fi
+
 	if [ "$(snapshot_format)" = "separate" ]; then
 		cp "$staging/layout" "$primary"
 		if [ -n "$(find "$staging/pane_contents" -type f -print 2>/dev/null | head -1)" ]; then
@@ -267,6 +324,7 @@ snapshot_create() {
 		tar czf "$primary" -C "$staging" .
 	fi
 	ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+	printf '%s\n' "$new_hash" > "$hash_file"
 }
 
 # Populates the restore staging area (./layout, ./pane_contents/) from a
@@ -376,7 +434,7 @@ remove_old_backups() {
 	done
 	local last_link="$(last_session_file "$session")"
 	if [ -L "$last_link" ] && [ ! -e "$last_link" ]; then
-		rm -f "$last_link"
+		rm -f "$last_link" "$(snapshot_hash_file "$session")"
 	fi
 }
 

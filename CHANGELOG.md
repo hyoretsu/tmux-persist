@@ -1,5 +1,12 @@
 # Changelog
 
+### Unreleased
+
+- Saves whose content is byte-identical to a session's latest snapshot no longer
+  write a duplicate file; the existing snapshot's mtime is refreshed instead so
+  age-based pruning keeps it alive. This keeps auto-save-on-detach from piling up
+  identical snapshots. Toggle with `@persist-skip-unchanged` (default `on`).
+
 ### v5.1.0, 2026-06-20
 
 - Restored panes no longer pile up duplicate shell prompts. The trailing prompt is

@@ -323,8 +323,34 @@ snapshot_create() {
 	else
 		tar czf "$primary" -C "$staging" .
 	fi
-	ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
-	printf '%s\n' "$new_hash" > "$hash_file"
+	# Only repoint "last" at a non-empty snapshot, and only then record its
+	# hash. A 0-byte primary means the save was interrupted/failed (e.g. the
+	# tmux socket vanished mid-save); the previous good pointer must survive
+	# instead of being clobbered with a file that makes restore fail - and, on
+	# auto-restore, can make tmux exit immediately. Skipping the hash write too
+	# means the next save retries for real instead of skip_unchanged matching
+	# a hash that was never actually persisted. (tmux-resurrect#115, #403)
+	if [ -s "$primary" ]; then
+		ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+		printf '%s\n' "$new_hash" > "$hash_file"
+	else
+		rm -f "$primary"
+		# "separate" format may have already written a companion pane-contents
+		# archive for this same (now-discarded) primary before we got here -
+		# nothing else ever removes it (remove_old_backups()'s pruning glob only
+		# matches a companion alongside a surviving primary of the same
+		# timestamp), so it would otherwise leak on disk forever.
+		rm -f "$(snapshot_companion_file "$primary")"
+	fi
+}
+
+# True if the session's "last" snapshot exists and is non-empty. A dangling
+# pointer or a 0-byte (corrupt/interrupted) snapshot is treated as no snapshot,
+# so restore skips gracefully instead of failing. (tmux-resurrect#403, #115)
+snapshot_valid() {
+	local session="$1"
+	local last="$(last_session_file "$session")"
+	[ -f "$last" ] && [ -s "$last" ]
 }
 
 # Populates the restore staging area (./layout, ./pane_contents/) from a

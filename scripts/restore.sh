@@ -74,11 +74,12 @@ is_line_type() {
 }
 
 check_saved_session_exists() {
-	local persist_file="$(last_session_file "$RESTORE_SESSION")"
-	if [ ! -f "$persist_file" ]; then
-		# In quiet mode (auto-restore on session creation) staying silent is
-		# expected: most new sessions have no saved snapshot.
-		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found!"
+	if ! snapshot_valid "$RESTORE_SESSION"; then
+		# Missing, dangling, or 0-byte (corrupt/interrupted) snapshot: skip the
+		# restore rather than feed tmux an empty file. In quiet mode (auto-restore
+		# on session creation) staying silent is expected: most new sessions have
+		# no saved snapshot.
+		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found or empty!"
 		return 1
 	fi
 }
@@ -482,7 +483,7 @@ restore_one_session() {
 _saved_session_pane_count() {
 	local session="$1" last target
 	last="$(last_session_file "$session")"
-	[ -e "$last" ] || { echo 0; return; }
+	snapshot_valid "$session" || { echo 0; return; }
 	target="$(readlink "$last")"
 	case "$target" in
 		*.tgz) tar xzOf "$last" ./layout 2>/dev/null | \grep -c $'^pane\t' ;;
@@ -633,7 +634,7 @@ restore_focus_for_all_saved_sessions() {
 	local session
 	while IFS= read -r session; do
 		[ -n "$session" ] || continue
-		[ -e "$(last_session_file "$session")" ] || continue
+		snapshot_valid "$session" || continue
 		RESTORE_SESSION="$session"
 		snapshot_extract "$session"
 		RESTORE_LAYOUT_FILE="$(snapshot_layout_file "restore")"

@@ -182,7 +182,7 @@ _strategy_exists() {
 
 _get_command_strategy() {
 	local pane_full_command="$1"
-	local command="$(_just_command "$pane_full_command")"
+	local command="$(_strategy_command_alias "$(_just_command "$pane_full_command")")"
 	get_tmux_option "${restore_process_strategy_option}${command}" ""
 }
 
@@ -190,9 +190,20 @@ _just_command() {
 	echo "$1" | cut -d' ' -f1
 }
 
+# Maps a command to the name used for strategy lookups so the vim-family editors
+# share vim's strategy and config. Users set @persist-strategy-vim and only
+# vim_session.sh exists, but `vi` and `view` are vim too - without this they get
+# no strategy (e.g. `vi` is not restored with `-S`). (tmux-resurrect#323)
+_strategy_command_alias() {
+	case "$1" in
+		vi|view) echo "vim" ;;
+		*) echo "$1" ;;
+	esac
+}
+
 _get_strategy_file() {
 	local pane_full_command="$1"
 	local strategy="$(_get_command_strategy "$pane_full_command")"
-	local command="$(_just_command "$pane_full_command")"
+	local command="$(_strategy_command_alias "$(_just_command "$pane_full_command")")"
 	echo "$CURRENT_DIR/../strategies/${command}_${strategy}.sh"
 }

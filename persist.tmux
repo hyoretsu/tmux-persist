@@ -21,6 +21,15 @@ set_restore_bindings() {
 	done
 }
 
+set_delete_bindings() {
+	# No default key: only bind when the user opts in via @persist-delete.
+	local key_bindings=$(get_tmux_option "$delete_option" "$default_delete_key")
+	local key
+	for key in $key_bindings; do
+		tmux bind-key "$key" run-shell "$CURRENT_DIR/scripts/delete.sh"
+	done
+}
+
 set_default_strategies() {
 	tmux set-option -gq "${restore_process_strategy_option}irb" "default_strategy"
 	tmux set-option -gq "${restore_process_strategy_option}mosh-client" "default_strategy"
@@ -29,6 +38,7 @@ set_default_strategies() {
 set_script_path_options() {
 	tmux set-option -gq "$save_path_option" "$CURRENT_DIR/scripts/save.sh"
 	tmux set-option -gq "$restore_path_option" "$CURRENT_DIR/scripts/restore.sh"
+	tmux set-option -gq "$delete_path_option" "$CURRENT_DIR/scripts/delete.sh"
 }
 
 set_save_on_exit_hooks() {
@@ -93,6 +103,7 @@ main() {
 	warn_legacy_options
 	set_save_bindings
 	set_restore_bindings
+	set_delete_bindings
 	set_default_strategies
 	set_script_path_options
 	set_save_on_exit_hooks

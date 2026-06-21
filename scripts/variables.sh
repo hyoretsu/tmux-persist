@@ -7,6 +7,12 @@ default_restore_key="C-r"
 restore_option="@persist-restore"
 restore_path_option="@persist-restore-script-path"
 
+# Deleting a session's saved snapshots is destructive, so there is no default
+# key binding. Set @persist-delete to a key (e.g. 'C-d') to bind it.
+default_delete_key=""
+delete_option="@persist-delete"
+delete_path_option="@persist-delete-script-path"
+
 # default processes that are restored
 default_proc_list_option="@persist-default-processes"
 default_proc_list='vi vim view nvim emacs man less more tail top htop irssi weechat mutt'

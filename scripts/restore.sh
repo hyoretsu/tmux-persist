@@ -307,6 +307,31 @@ restore_window_properties() {
 		done
 }
 
+# Re-apply per-window options saved as "wopt" lines (see dump_window_options).
+# The value is the line remainder, so values with spaces survive; tmux wraps
+# string values in quotes on show, which are stripped before re-setting.
+# (tmux-resurrect#132)
+restore_window_options() {
+	\grep '^wopt' "$RESTORE_LAYOUT_FILE" 2>/dev/null |
+		while IFS=$d read -r line_type session_name window_number opt; do
+			[ -n "$session_name" ] || continue
+			[ -n "$opt" ] || continue
+			local name="${opt%% *}"
+			local value=""
+			case "$opt" in
+				*" "*)
+					value="${opt#* }"
+					value="${value%\"}"; value="${value#\"}"
+					;;
+			esac
+			if [ -n "$value" ]; then
+				tmux set-option -w -t "${session_name}:${window_number}" "$name" "$value" 2>/dev/null
+			else
+				tmux set-option -w -t "${session_name}:${window_number}" "$name" 2>/dev/null
+			fi
+		done
+}
+
 restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
@@ -368,6 +393,7 @@ main() {
 		execute_hook "pre-restore-all"
 		restore_all_panes
 		restore_window_properties >/dev/null 2>&1
+		restore_window_options
 		execute_hook "pre-restore-pane-processes"
 		restore_all_pane_processes
 		# below functions restore exact cursor positions

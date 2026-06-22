@@ -249,6 +249,21 @@ dump_windows() {
 			# If the option was unset, use ":" as a placeholder.
 			[ -z "${automatic_rename}" ] && automatic_rename=":"
 			echo "${line_type}${d}${session_name}${d}${window_index}${d}${window_name}${d}${window_active}${d}${window_flags}${d}${window_layout}${d}${automatic_rename}"
+			dump_window_options "$session_name" "$window_index"
+		done
+}
+
+# Emits one "wopt" line per locally-set window option (e.g. monitor-activity),
+# so per-window options survive restore. `show-options -w` (no -g) lists only the
+# overrides set on the window, not inherited globals. The distinct "wopt" line
+# type avoids the `^window` / `^pane` greps; older snapshots simply lack these
+# lines. (tmux-resurrect#132)
+dump_window_options() {
+	local session_name="$1"
+	local window_index="$2"
+	tmux show-options -w -t "${session_name}:${window_index}" 2>/dev/null |
+		while IFS= read -r opt; do
+			[ -n "$opt" ] && echo "wopt${d}${session_name}${d}${window_index}${d}${opt}"
 		done
 }
 

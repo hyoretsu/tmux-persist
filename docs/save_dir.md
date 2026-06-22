@@ -1,7 +1,13 @@
 # Persist save dir
 
-By default Tmux environment is saved to a file in `~/.tmux/persist` dir.
-Change this with:
+By default the Tmux environment is saved under `$XDG_STATE_HOME/tmux/persist`
+(i.e. `~/.local/state/tmux/persist`) on a fresh install, since saved sessions
+are application *state* per the XDG base-dir spec. Existing locations are still
+used when present, in this order: `~/.tmux/persist`, the legacy
+`~/.tmux/resurrect`, `$XDG_STATE_HOME/tmux/persist`, the legacy
+`$XDG_DATA_HOME/tmux/resurrect`, then `$XDG_DATA_HOME/tmux/persist`.
+
+Change the location with:
 
     set -g @persist-dir '/some/path'
 

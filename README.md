@@ -69,7 +69,7 @@ This plugin goes to great lengths to save and restore all the details from your
 Optional:
 
 - [restoring vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)
-- [restoring AI agent CLI sessions](docs/restoring_agent_sessions.md) (`claude`, `codex`)
+- [restoring AI agent CLI sessions](docs/restoring_agent_sessions.md) (`claude`, `codex`, `copilot`, `cursor-agent`, `agy`, `gemini`, `opencode`)
 - [restoring a previously saved environment](docs/restoring_previously_saved_environment.md)
 
 Requirements / dependencies: `tmux 1.9` or higher, `bash`.
@@ -145,7 +145,8 @@ You should now be able to use the plugin.
 - [Restoring vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)
   is nice if you're a vim/neovim user.
 - [Restoring AI agent CLI sessions](docs/restoring_agent_sessions.md) resumes the
-  most recent `claude` / `codex` conversation per pane, enabled by default.
+  most recent conversation per pane for `claude`, `codex`, `copilot`,
+  `cursor-agent`, `agy` (Antigravity), `gemini` and `opencode`, enabled by default.
 - [Restoring pane contents](docs/restoring_pane_contents.md) is enabled by
   default; this doc explains how to tune or disable it.
 

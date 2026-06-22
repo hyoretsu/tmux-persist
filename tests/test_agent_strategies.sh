@@ -6,6 +6,11 @@ source "$(dirname "$0")/helpers/test_helpers.sh"
 
 CLAUDE="$PLUGIN_DIR/strategies/claude_session.sh"
 CODEX="$PLUGIN_DIR/strategies/codex_session.sh"
+COPILOT="$PLUGIN_DIR/strategies/copilot_session.sh"
+CURSOR="$PLUGIN_DIR/strategies/cursor-agent_session.sh"
+AGY="$PLUGIN_DIR/strategies/agy_session.sh"
+GEMINI="$PLUGIN_DIR/strategies/gemini_session.sh"
+OPENCODE="$PLUGIN_DIR/strategies/opencode_session.sh"
 
 assert_strategy() { # script desc input expected
 	assert_eq "$("$1" "$3" "/some/dir")" "$4" "$2"
@@ -41,22 +46,64 @@ assert_strategy "$CODEX" "codex resume <id> preserved" \
 assert_strategy "$CODEX" "codex fork <id> preserved" \
 	"codex fork abc123" "codex fork abc123"
 
+# --- copilot_session.sh ---
+assert_strategy "$COPILOT" "bare copilot gets --continue" \
+	"copilot" "copilot --continue"
+assert_strategy "$COPILOT" "copilot --continue not duplicated" \
+	"copilot --continue" "copilot --continue"
+assert_strategy "$COPILOT" "copilot --resume <id> preserved" \
+	"copilot --resume abc123" "copilot --resume abc123"
+
+# --- cursor-agent_session.sh ---
+assert_strategy "$CURSOR" "bare cursor-agent gets --continue" \
+	"cursor-agent" "cursor-agent --continue"
+assert_strategy "$CURSOR" "cursor-agent resume subcommand preserved" \
+	"cursor-agent resume" "cursor-agent resume"
+assert_strategy "$CURSOR" "cursor-agent --resume=<id> preserved" \
+	"cursor-agent --resume=abc123" "cursor-agent --resume=abc123"
+
+# --- agy_session.sh ---
+assert_strategy "$AGY" "bare agy gets --continue" \
+	"agy" "agy --continue"
+assert_strategy "$AGY" "agy --conversation=<id> preserved" \
+	"agy --conversation=abc123" "agy --conversation=abc123"
+assert_strategy "$AGY" "agy -c <id> preserved" \
+	"agy -c abc123" "agy -c abc123"
+
+# --- gemini_session.sh ---
+assert_strategy "$GEMINI" "bare gemini gets --resume" \
+	"gemini" "gemini --resume"
+assert_strategy "$GEMINI" "gemini --resume not duplicated" \
+	"gemini --resume" "gemini --resume"
+assert_strategy "$GEMINI" "gemini -r preserved" \
+	"gemini -r" "gemini -r"
+
+# --- opencode_session.sh ---
+assert_strategy "$OPENCODE" "bare opencode gets --continue" \
+	"opencode" "opencode --continue"
+assert_strategy "$OPENCODE" "opencode -c not duplicated" \
+	"opencode -c" "opencode -c"
+assert_strategy "$OPENCODE" "opencode --session <id> preserved" \
+	"opencode --session abc123" "opencode --session abc123"
+
 # --- wiring (default proc list + default strategy registration) ---
 source "$PLUGIN_DIR/scripts/variables.sh"
-assert_contains "$default_proc_list" "claude" "claude in default_proc_list"
-assert_contains "$default_proc_list" "codex"  "codex in default_proc_list"
+for agent in claude codex copilot cursor-agent agy gemini opencode; do
+	assert_contains "$default_proc_list" "$agent" "$agent in default_proc_list"
+done
 
 setup
 load_plugin
 strategies="$(tmuxp show-options -g 2>/dev/null)"
 teardown
-assert_contains "$strategies" "${restore_process_strategy_option}claude session" \
-	"claude registered as 'session' strategy"
-assert_contains "$strategies" "${restore_process_strategy_option}codex session" \
-	"codex registered as 'session' strategy"
+for agent in claude codex copilot cursor-agent agy gemini opencode; do
+	assert_contains "$strategies" "${restore_process_strategy_option}${agent} session" \
+		"$agent registered as 'session' strategy"
+done
 
 # --- strategy files are executable ---
-[ -x "$CLAUDE" ] && _ok "claude_session.sh executable" || _ko "claude_session.sh executable"
-[ -x "$CODEX" ]  && _ok "codex_session.sh executable"  || _ko "codex_session.sh executable"
+for f in "$CLAUDE" "$CODEX" "$COPILOT" "$CURSOR" "$AGY" "$GEMINI" "$OPENCODE"; do
+	[ -x "$f" ] && _ok "$(basename "$f") executable" || _ko "$(basename "$f") executable"
+done
 
 finish

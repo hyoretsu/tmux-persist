@@ -9,7 +9,7 @@ restore_path_option="@persist-restore-script-path"
 
 # default processes that are restored
 default_proc_list_option="@persist-default-processes"
-default_proc_list='vi vim view nvim emacs man less more tail top htop irssi weechat mutt claude codex'
+default_proc_list='vi vim view nvim emacs man less more tail top htop irssi weechat mutt claude codex copilot cursor-agent agy gemini opencode'
 
 # User defined processes that are restored
 #  'false' - nothing is restored

@@ -26,6 +26,11 @@ set_default_strategies() {
 	tmux set-option -gq "${restore_process_strategy_option}mosh-client" "default_strategy"
 	tmux set-option -gq "${restore_process_strategy_option}claude" "session"
 	tmux set-option -gq "${restore_process_strategy_option}codex" "session"
+	tmux set-option -gq "${restore_process_strategy_option}copilot" "session"
+	tmux set-option -gq "${restore_process_strategy_option}cursor-agent" "session"
+	tmux set-option -gq "${restore_process_strategy_option}agy" "session"
+	tmux set-option -gq "${restore_process_strategy_option}gemini" "session"
+	tmux set-option -gq "${restore_process_strategy_option}opencode" "session"
 }
 
 set_script_path_options() {

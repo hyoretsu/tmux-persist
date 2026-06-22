@@ -9,7 +9,7 @@ which covers upstream *issues*.
 |---|---|---|---|---|
 | [#558](https://github.com/tmux-plugins/tmux-resurrect/pull/558) | Add Claude Code and Codex CLI session restore | 2026-06-22 | **Adopted (base)** | Ported `claude`/`codex` `session` strategies + default-list wiring + tests. See [`restoring_agent_sessions.md`](restoring_agent_sessions.md). |
 | [#571](https://github.com/tmux-plugins/tmux-resurrect/pull/571) | Restore claude sessions via `--resume <id>` | 2026-06-22 | Rejected | Heavy: needs a `SessionStart` hook, `python3`, and manual `settings.json` edits for per-pane mapping; its basic mode hand-reads `~/.claude/projects/*.jsonl` instead of using `claude --continue`. Per-pane correctness noted as a [known limitation](restoring_agent_sessions.md#limitation-multiple-panes-same-directory). |
-| [#572](https://github.com/tmux-plugins/tmux-resurrect/pull/572) | Resurrect `copilot`, `agy`, `codex` CLIs | 2026-06-22 | Rejected | One large pre-save hook that fuzzy-matches pane text against app SQLite DBs (`session-store.db`, `state_5.sqlite`) and process logs; author-flagged "vibe-coded", no tests, fragile across CLI/DB-schema changes. Codex coverage met by #558 instead. |
+| [#572](https://github.com/tmux-plugins/tmux-resurrect/pull/572) | Resurrect `copilot`, `agy`, `codex` CLIs | 2026-06-22 | Rejected (mechanism) | One large pre-save hook that fuzzy-matches pane text against app SQLite DBs (`session-store.db`, `state_5.sqlite`) and process logs; author-flagged "vibe-coded", no tests, fragile across CLI/DB-schema changes. Its target CLIs are instead covered by clean `session` strategies: `copilot --continue`, `agy --continue`, `codex resume --last`. See [`restoring_agent_sessions.md`](restoring_agent_sessions.md). |
 
 ## Why #558 over #571 / #572
 
@@ -31,3 +31,8 @@ which covers upstream *issues*.
   whole-token matching so a `--continue` inside a prompt argument can't trip it.
 - Wired as fork defaults via `persist.tmux` `set_default_strategies` and the
   `@persist-` option namespace (not the upstream `@resurrect-` names).
+- Extended the same dependency-free pattern beyond #558's claude/codex to the
+  other famous agent CLIs that expose a "continue last" command: `copilot`,
+  `cursor-agent` (Cursor), `agy` (Antigravity), `gemini`, `opencode`. Agents
+  without such a command (e.g. aider, which auto-restores from in-repo history)
+  are intentionally left out.

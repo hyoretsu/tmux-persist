@@ -1,5 +1,14 @@
 # Changelog
 
+### v5.1.2, 2026-06-22
+
+- Extends AI agent CLI session restore to five more agents, all on by default:
+  GitHub Copilot CLI (`copilot --continue`), Cursor (`cursor-agent --continue`),
+  Antigravity (`agy --continue`), Gemini CLI (`gemini --resume`) and `opencode`
+  (`opencode --continue`). Each rewrites a bare launch into the CLI's own
+  resume-most-recent form and preserves an explicit by-id resume. See
+  [restoring AI agent CLI sessions](docs/restoring_agent_sessions.md).
+
 ### v5.1.1, 2026-06-22
 
 - Restores AI agent CLI sessions. `claude` and `codex` panes now resume their

@@ -1,6 +1,17 @@
 # Changelog
 
-### Unreleased
+### v5.1.1, 2026-06-22
+
+- Restores AI agent CLI sessions. `claude` and `codex` panes now resume their
+  most recent conversation on restore (`claude --continue`, `codex resume
+  --last`) instead of launching empty; an explicit `--resume`/`-r` (claude) or
+  `resume`/`fork` (codex) you already typed is preserved. Both are in the default
+  process list, so it works with no configuration. See
+  [restoring AI agent CLI sessions](docs/restoring_agent_sessions.md). Adapted
+  from upstream tmux-resurrect [#558](https://github.com/tmux-plugins/tmux-resurrect/pull/558);
+  see [`docs/upstream-pr-review.md`](docs/upstream-pr-review.md) for the
+  comparison against [#571](https://github.com/tmux-plugins/tmux-resurrect/pull/571)
+  and [#572](https://github.com/tmux-plugins/tmux-resurrect/pull/572).
 
 - Saves whose content is byte-identical to a session's latest snapshot no longer
   write a duplicate file; the existing snapshot's mtime is refreshed instead so

@@ -449,6 +449,22 @@ prune_all_old_backups() {
 	done
 }
 
+# Permanently removes a session's saved snapshots: every "<session>_<ts>.<ext>"
+# primary, its "_pane_contents.tgz" companion, and the "<session>_last" pointer.
+# The exact-shape timestamp glob (????????T??????) deletes only this session -
+# never a differently-named one that merely shares a prefix. (tmux-resurrect#552,
+# #466, #385)
+delete_session() {
+	local session="$1"
+	[ -n "$session" ] || return 1
+	shopt -s nullglob
+	local snapshot
+	for snapshot in "$(persist_dir)/${session}_"????????T??????"."* ; do
+		rm -f "$snapshot" "$(snapshot_companion_file "$snapshot")"
+	done
+	rm -f "$(last_session_file "$session")"
+}
+
 # One-time migration of a tmux-resurrect global snapshot (a single
 # "tmux_resurrect_<ts>.txt" plus a shared "pane_contents.tar.gz") into per-session
 # tmux-persist snapshots. Idempotent via a marker file; never clobbers a session

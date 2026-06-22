@@ -64,6 +64,15 @@ supported_tmux_version_ok() {
 	$CURRENT_DIR/check_tmux_version.sh "$SUPPORTED_VERSION"
 }
 
+# Creates a directory tree (like `mkdir -p`) but with private (0700) perms, so
+# saved sessions are never group/world-readable under a permissive umask. The
+# chmod targets the leaf; the whole persist tree lives under it, so one private
+# root keeps every snapshot private. (tmux-resurrect#561)
+ensure_private_dir() {
+	mkdir -p "$1"
+	chmod 0700 "$1"
+}
+
 remove_first_char() {
 	echo "$1" | cut -c2-
 }
@@ -334,7 +343,7 @@ snapshot_extract() {
 	local last="$(last_session_file "$session")"
 	rm -rf "$(persist_dir)/restore"
 	[ -e "$last" ] || return
-	mkdir -p "$(persist_dir)/restore"
+	ensure_private_dir "$(persist_dir)/restore"
 	local target="$(readlink "$last")"
 	case "$target" in
 		*.tgz)
@@ -470,7 +479,7 @@ migrate_legacy_snapshots() {
 
 	# Unpack the shared pane-contents archive once (old name scheme: pane-<id>).
 	local work="$dir/.migrate"
-	rm -rf "$work"; mkdir -p "$work"
+	rm -rf "$work"; ensure_private_dir "$work"
 	[ -f "$dir/pane_contents.tar.gz" ] &&
 		gzip -d < "$dir/pane_contents.tar.gz" | tar xf - -C "$work" 2>/dev/null
 
@@ -480,12 +489,12 @@ migrate_legacy_snapshots() {
 		[ -n "$session" ] || continue
 		[ -e "$(last_session_file "$session")" ] && continue   # keep existing persist snapshot
 
-		rm -rf "$dir/save"; mkdir -p "$dir/save"
+		rm -rf "$dir/save"; ensure_private_dir "$dir/save"
 		awk -F'\t' -v s="$session" \
 			'($1=="pane"||$1=="window"||$1=="grouped_session") && $2==s' \
 			"$old_file" > "$dir/save/layout"
 		for pc in "$work/pane_contents/pane-${session}:"*; do
-			mkdir -p "$dir/save/pane_contents"
+			ensure_private_dir "$dir/save/pane_contents"
 			cp "$pc" "$dir/save/pane_contents/"
 		done
 		snapshot_create "$session"

@@ -68,6 +68,17 @@ remove_first_char() {
 	echo "$1" | cut -c2-
 }
 
+# Login-shell flag for the configured shell. Restored panes otherwise run a
+# non-login interactive shell, so login files (~/.zprofile, ~/.zlogin,
+# ~/.profile, ...) are never sourced. Every common interactive shell (bash,
+# zsh, fish, dash, ksh) understands -l, so pass it whenever a shell is set -
+# not only for bash. Empty when no shell is configured (nothing to flag).
+# (tmux-resurrect#497)
+login_shell_opt() {
+	local shell="$1"
+	[ -n "$shell" ] && echo "-l "
+}
+
 capture_pane_contents_option_on() {
 	local option="$(get_tmux_option "$pane_contents_option" "$default_pane_contents")"
 	[ "$option" == "on" ]

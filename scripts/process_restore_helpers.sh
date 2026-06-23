@@ -100,6 +100,14 @@ _proc_matches_full_command() {
 		if [[ "$pane_full_command" =~ (^${match} ) ]] || [[ "$pane_full_command" =~ (^${match}$) ]]; then
 			return 0
 		fi
+		# Same check against the executable's basename, so an absolute-path
+		# launch (e.g. `/opt/claude-code/bin/claude`, produced when a small PATH
+		# wrapper exec's the real binary) still matches a bare entry like
+		# `claude` on the restore list.
+		local command_basename="$(_command_basename "$pane_full_command")"
+		if [[ "$command_basename" =~ (^${match} ) ]] || [[ "$command_basename" =~ (^${match}$) ]]; then
+			return 0
+		fi
 	fi
 	return 1
 }
@@ -183,16 +191,36 @@ _strategy_exists() {
 _get_command_strategy() {
 	local pane_full_command="$1"
 	local command="$(_just_command "$pane_full_command")"
-	get_tmux_option "${restore_process_strategy_option}${command}" ""
+	local strategy="$(get_tmux_option "${restore_process_strategy_option}${command}" "")"
+	if [ -z "$strategy" ]; then
+		# Fall back to the executable's basename so an absolute-path launch
+		# (exec-wrapper packaging) resolves the strategy registered for the
+		# bare command name (e.g. `claude` -> `claude_session.sh`).
+		local command_basename="$(_command_basename "$pane_full_command")"
+		if [ "$command_basename" != "$command" ]; then
+			strategy="$(get_tmux_option "${restore_process_strategy_option}${command_basename}" "")"
+		fi
+	fi
+	echo "$strategy"
 }
 
 _just_command() {
 	echo "$1" | cut -d' ' -f1
 }
 
+# Basename of the command being run (first token of the full command), so
+# matching and strategy lookup work whether the pane was launched as a bare
+# command (`claude`) or via an absolute path (`/opt/.../claude`).
+_command_basename() {
+	local command="$(_just_command "$1")"
+	echo "${command##*/}"
+}
+
 _get_strategy_file() {
 	local pane_full_command="$1"
 	local strategy="$(_get_command_strategy "$pane_full_command")"
-	local command="$(_just_command "$pane_full_command")"
+	# Strategy files are named by the bare command (`claude_session.sh`), so use
+	# the basename even when the pane was launched by absolute path.
+	local command="$(_command_basename "$pane_full_command")"
 	echo "$CURRENT_DIR/../strategies/${command}_${strategy}.sh"
 }

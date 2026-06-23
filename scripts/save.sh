@@ -264,6 +264,15 @@ dump_pane_contents() {
 # bundling its layout and (when enabled) its pane contents.
 save_session() {
 	local session="$1"
+
+	# Skip unnamed (numeric-named) sessions unless the user opts in. Their name
+	# is an ephemeral tmux counter that won't match anything on restore, so
+	# saving them just litters the persist dir with "8_<ts>" snapshots.
+	if [ "$(get_tmux_option "$save_unnamed_option" "$default_save_unnamed")" != "on" ] \
+		&& is_session_unnamed "$session"; then
+		return
+	fi
+
 	local layout_file="$(snapshot_layout_file "save")"
 
 	# Build the snapshot in the staging area: ./layout (+ ./pane_contents/).

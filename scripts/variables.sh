@@ -86,6 +86,12 @@ default_save_on_exit="on"
 auto_restore_option="@persist-auto-restore"
 default_auto_restore="on"
 
+# Save sessions that have no explicit name. tmux names an unnamed session with a
+# number (0, 1, 2, ...), so these are throwaway sessions whose numeric name will
+# not match anything on restore. Skipped by default; set to 'on' to save them.
+save_unnamed_option="@persist-save-unnamed"
+default_save_unnamed="off"
+
 # Internal marker (set per server) so the one-time restore of sessions that
 # already exist when the plugin loads runs only once, not on every reload.
 initialized_option="@persist-initialized"

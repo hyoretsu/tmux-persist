@@ -161,13 +161,17 @@ You should now be able to use the plugin.
   opening highlighted file or a url
 - [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) - automatic
   restoring and continuous saving of tmux env
-  (note: its automatic save/restore trigger doesn't currently work with
-  tmux-persist - it looks for `@resurrect-save-script-path`, which
-  tmux-persist doesn't set, so that specific feature silently no-ops here)
+  (note: its periodic *save* works with tmux-persist via a small
+  compatibility wrapper - see #97. Its automatic *restore-on-boot* still
+  doesn't: `restore.sh` has no "restore every session" mode and boot-time
+  restore has no attached client to begin with, which runs into the
+  existing #31 regardless of anything continuum does)
 - [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
   periodic full-fleet saves via a macOS launchd timer, independent of any
   attached client (covers a hard crash mid-session, not just clean
-  detach/exit) - fills the gap left by tmux-continuum above
+  detach/exit) - an alternative to continuum's save trigger above, portable
+  to any OS with launchd/systemd support versus continuum's
+  status-line-rendering dependency
 
 ### Reporting bugs and contributing
 

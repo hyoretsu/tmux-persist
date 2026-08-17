@@ -41,7 +41,10 @@ independent of any attached client, see "Other goodies" below.
 Each session is saved separately to its own files, so save and restore only
 ever touch the session you are in — restore never recreates or switches you to
 other sessions. To save/restore a specific session by name, run
-`scripts/save.sh <session-name>` / `scripts/restore.sh <session-name>`.
+`scripts/save.sh <session-name>` / `scripts/restore.sh <session-name>`. To
+restore every saved session at once (e.g. after losing the whole tmux
+server), run `scripts/restore.sh all` - see
+[restoring a previously saved environment](docs/restoring_previously_saved_environment.md).
 
 Saving and restoring also happen **automatically**: sessions are saved on
 detach, disconnect and exit, and restored when a session is (re)created. See

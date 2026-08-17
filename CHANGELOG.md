@@ -1,5 +1,19 @@
 # Changelog
 
+### v5.1.3, 2026-06-22
+
+- Unnamed sessions are no longer saved by default. A session started without a
+  name gets a numeric tmux name (`0`, `1`, …) that matches nothing on restore,
+  so saving it just littered the persist dir with `8_last`-style snapshots.
+  These throwaway sessions are now skipped; opt back in with
+  `@persist-save-unnamed 'on'`.
+- Fixes agent CLI session restore for absolute-path launches. When a PATH
+  wrapper `exec`s the real binary (e.g. `/usr/bin/claude` →
+  `/opt/claude-code/bin/claude`), the save strategy records the absolute path;
+  restore matching and strategy lookup now fall back to the executable's
+  basename, so `claude` (and the other agents) is relaunched and resumed
+  instead of left as a bare shell. Bare launches are unaffected.
+
 ### v5.1.2, 2026-06-22
 
 - Extends AI agent CLI session restore to five more agents, all on by default:

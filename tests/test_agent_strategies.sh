@@ -86,6 +86,37 @@ assert_strategy "$OPENCODE" "opencode -c not duplicated" \
 assert_strategy "$OPENCODE" "opencode --session <id> preserved" \
 	"opencode --session abc123" "opencode --session abc123"
 
+# --- absolute-path launch resolves to the bare command (exec-wrapper packaging) ---
+# A PATH wrapper that `exec`s the real binary (e.g. /usr/bin/claude ->
+# /opt/claude-code/bin/claude) makes the `ps` save strategy record the absolute
+# path. Matching and strategy lookup must fall back to the basename, otherwise
+# the agent is never relaunched on restore.
+CURRENT_DIR="$PLUGIN_DIR/scripts"
+restore_process_strategy_option="@persist-strategy-"
+# Stub so _get_command_strategy needs no running tmux: pretend only `claude` is
+# registered to the `session` strategy. process_restore_helpers.sh does not
+# source helpers.sh, so get_tmux_option is otherwise undefined here.
+get_tmux_option() { [ "$1" = "${restore_process_strategy_option}claude" ] && echo "session"; }
+source "$PLUGIN_DIR/scripts/process_restore_helpers.sh"
+
+_proc_matches_full_command "/opt/claude-code/bin/claude" "claude" \
+	&& _ok "abs-path claude matches restore-list 'claude'" \
+	|| _ko "abs-path claude matches restore-list 'claude'"
+_proc_matches_full_command "/opt/claude-code/bin/claude --resume x" "claude" \
+	&& _ok "abs-path claude with args matches 'claude'" \
+	|| _ko "abs-path claude with args matches 'claude'"
+_proc_matches_full_command "/usr/bin/notclaude" "claude" \
+	&& _ko "abs-path basename must be a whole word, not substring" \
+	|| _ok "abs-path basename must be a whole word, not substring"
+
+assert_eq "$(_command_basename "/opt/claude-code/bin/claude --foo")" "claude" \
+	"_command_basename strips dir and args"
+assert_eq "$(_get_command_strategy "/opt/claude-code/bin/claude")" "session" \
+	"abs-path claude resolves 'session' strategy via basename"
+assert_eq "$(basename "$(_get_strategy_file "/opt/claude-code/bin/claude")")" "claude_session.sh" \
+	"abs-path claude resolves claude_session.sh"
+unset -f get_tmux_option
+
 # --- wiring (default proc list + default strategy registration) ---
 source "$PLUGIN_DIR/scripts/variables.sh"
 for agent in claude codex copilot cursor-agent agy gemini opencode; do

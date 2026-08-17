@@ -36,6 +36,12 @@ set_default_strategies() {
 set_script_path_options() {
 	tmux set-option -gq "$save_path_option" "$CURRENT_DIR/scripts/save.sh"
 	tmux set-option -gq "$restore_path_option" "$CURRENT_DIR/scripts/restore.sh"
+	# Cross-compat with tmux-continuum's periodic autosave, which only knows
+	# this legacy option name and only ever invokes it with a bare "quiet".
+	# Points at a wrapper, not save.sh directly - see
+	# scripts/continuum_save_compat.sh. Restore is intentionally not bridged
+	# the same way; see docs/continuum_compat.md.
+	tmux set-option -gq "$continuum_save_path_option" "$CURRENT_DIR/scripts/continuum_save_compat.sh"
 }
 
 set_save_on_exit_hooks() {
@@ -88,9 +94,22 @@ restore_existing_sessions_once() {
 
 # If the user still has any old @resurrect-* options set, they keep working
 # (see get_tmux_option), but advise migrating - once per server.
+#
+# Excludes $continuum_save_path_option: that's not a user-set legacy config
+# option, it's tmux-continuum's own integration point, which
+# set_script_path_options sets itself on every load (see there). Without
+# this exclusion, that self-set option would match "^@resurrect-" starting
+# on the plugin's *second* load onward (the first load runs this check
+# before set_script_path_options sets it) and fire a false "you have legacy
+# options" warning for every user, continuum or not - and since this is a
+# one-shot warning gated by @persist-legacy-warned, it would also permanently
+# suppress the real warning for anyone who later sets an actual legacy
+# option, since the one-shot flag would already be burned.
 warn_legacy_options() {
 	[ "$(tmux show-option -gqv @persist-legacy-warned)" = "1" ] && return
-	if tmux show-options -g 2>/dev/null | grep -q '^@resurrect-'; then
+	if tmux show-options -g 2>/dev/null |
+		\grep -v "^${continuum_save_path_option} " |
+		\grep -q '^@resurrect-'; then
 		tmux set-option -g @persist-legacy-warned 1
 		tmux display-message "tmux-persist: '@resurrect-*' options are deprecated - rename them to '@persist-*'."
 	fi

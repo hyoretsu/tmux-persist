@@ -219,6 +219,13 @@ is_session_grouped() {
 	[[ "$GROUPED_SESSIONS" == *"${d}${session_name}${d}"* ]]
 }
 
+# tmux gives a session created without an explicit name (e.g. plain `tmux` or
+# `tmux new`) a numeric name: 0, 1, 2, ... A purely numeric name therefore means
+# "unnamed/default". Used to skip saving throwaway sessions by default.
+is_session_unnamed() {
+	[[ "$1" =~ ^[0-9]+$ ]]
+}
+
 # pane content file helpers
 
 # A snapshot stores a session's layout and (optionally) its pane contents. Two

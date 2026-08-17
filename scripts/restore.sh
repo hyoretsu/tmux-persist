@@ -235,6 +235,16 @@ new_pane() {
 
 restore_pane() {
 	local pane="$1"
+	# Skip malformed lines with no session name. tmux rejects an empty name
+	# (`new-session -s ""` -> "invalid session"), so a crafted or pre-3.x
+	# snapshot carrying one (tmux-resurrect#415, e.g. `rename-session ''`)
+	# would otherwise derail the whole restore. Checked with awk, not the
+	# `read` below: bash's `read` collapses runs of IFS whitespace - a lone
+	# tab included - so a genuinely empty #{session_name} field never reaches
+	# a variable as an empty string, it vanishes and silently shifts every
+	# later field left by one instead. A literal single-char awk FS doesn't
+	# have that problem - it keeps empty fields exactly where they are.
+	printf '%s\n' "$pane" | awk -F'\t' '{ exit ($2 == "") }' || return
 	while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
 		dir="$(remove_first_char "$dir")"
 		pane_full_command="$(remove_first_char "$pane_full_command")"
@@ -274,7 +284,10 @@ restore_pane() {
 
 restore_grouped_session() {
 	local grouped_session="$1"
-	echo "$grouped_session" |
+	# Skip nameless sessions (tmux-resurrect#415). Filtered with awk, not the
+	# `read` below - see restore_pane for why a `read`-based emptiness check
+	# on a tab-delimited field doesn't actually work.
+	echo "$grouped_session" | awk -F'\t' '$2 != ""' |
 	while IFS=$d read line_type grouped_session original_session alternate_window active_window; do
 		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$grouped_session" -t "$original_session"
 	done
@@ -282,7 +295,13 @@ restore_grouped_session() {
 
 restore_active_and_alternate_windows_for_grouped_sessions() {
 	local grouped_session="$1"
-	echo "$grouped_session" |
+	# Skip nameless sessions (tmux-resurrect#415, filtered with awk - see
+	# restore_pane) - beyond the noise the other guarded sites would produce,
+	# an empty $grouped_session here means "switch-client -t :$window_index",
+	# which tmux resolves against the *current* session and would silently
+	# steer a real client's focus somewhere unrelated instead of just
+	# failing loudly.
+	echo "$grouped_session" | awk -F'\t' '$2 != ""' |
 	while IFS=$d read line_type grouped_session original_session alternate_window_index active_window_index; do
 		alternate_window_index="$(remove_first_char "$alternate_window_index")"
 		active_window_index="$(remove_first_char "$active_window_index")"
@@ -343,7 +362,9 @@ restore_all_panes() {
 
 restore_window_properties() {
 	local window_name
-	\grep '^window' "$RESTORE_LAYOUT_FILE" |
+	# Skip nameless sessions (tmux-resurrect#415, filtered with awk - see
+	# restore_pane for why a `read`-based emptiness check doesn't work here).
+	\grep '^window' "$RESTORE_LAYOUT_FILE" | awk -F'\t' '$2 != ""' |
 		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename; do
 			tmux select-layout -t "${session_name}:${window_number}" "$window_layout"
 
@@ -363,7 +384,7 @@ restore_window_properties() {
 restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
-		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
+		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' "$RESTORE_LAYOUT_FILE" |
 			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
@@ -373,7 +394,7 @@ restore_all_pane_processes() {
 }
 
 restore_active_pane_for_each_window() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $9 == 1 { print $2, $3, $6; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number active_pane; do
 			tmux switch-client -t "${session_name}:${window_number}"
 			tmux select-pane -t "$active_pane"
@@ -381,7 +402,7 @@ restore_active_pane_for_each_window() {
 }
 
 restore_zoomed_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $2 != "" && $5 ~ /Z/ && $9 == 1 { print $2, $3; }' "$RESTORE_LAYOUT_FILE" |
 		while IFS=$d read session_name window_number; do
 			tmux resize-pane -t "${session_name}:${window_number}" -Z
 		done
@@ -407,7 +428,7 @@ restore_active_and_alternate_windows_for_all_grouped_sessions() {
 }
 
 restore_active_and_alternate_windows() {
-	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
+	awk 'BEGIN { FS="\t"; OFS="\t" } /^window/ && $2 != "" && $6 ~ /[*-]/ { print $2, $5, $3; }' "$RESTORE_LAYOUT_FILE" |
 		sort -u |
 		while IFS=$d read session_name active_window window_number; do
 			tmux switch-client -t "${session_name}:${window_number}"
@@ -480,14 +501,20 @@ restore_one_session() {
 # fleet-wide pane budget and, per session, as part of that session's
 # expected count. An unreadable/missing snapshot yields 0 rather than
 # aborting.
+#
+# Only counts pane lines with a non-empty session name (field 2): nameless
+# lines are skipped by restore_pane() (tmux-resurrect#415) and never become a
+# live pane, so counting them here would permanently overstate the expected
+# count and make restore_all_sessions() burn its full retry budget on a
+# session that actually restored correctly.
 _saved_session_pane_count() {
 	local session="$1" last target
 	last="$(last_session_file "$session")"
 	snapshot_valid "$session" || { echo 0; return; }
 	target="$(readlink "$last")"
 	case "$target" in
-		*.tgz) tar xzOf "$last" ./layout 2>/dev/null | \grep -c $'^pane\t' ;;
-		*) \grep -c $'^pane\t' "$last" 2>/dev/null ;;
+		*.tgz) tar xzOf "$last" ./layout 2>/dev/null | \grep -c $'^pane\t[^\t]' ;;
+		*) \grep -c $'^pane\t[^\t]' "$last" 2>/dev/null ;;
 	esac
 }
 
@@ -547,7 +574,7 @@ restore_all_sessions() {
 			restore_all_panes
 
 			local expected_panes live_panes matched="false"
-			expected_panes="$(\grep -c $'^pane\t' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
+			expected_panes="$(\grep -c $'^pane\t[^\t]' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
 			live_panes="$(tmux list-panes -s -t "$session" 2>/dev/null | wc -l | tr -d ' ')"
 
 			if [ "$live_panes" = "$expected_panes" ]; then
@@ -558,7 +585,7 @@ restore_all_sessions() {
 					sleep "$(awk -v ms="$backoff_ms" 'BEGIN { printf "%.3f", ms / 1000 }')"
 					cumulative_ms=$((cumulative_ms + backoff_ms))
 					restore_all_panes
-					expected_panes="$(\grep -c $'^pane\t' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
+					expected_panes="$(\grep -c $'^pane\t[^\t]' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
 					live_panes="$(tmux list-panes -s -t "$session" 2>/dev/null | wc -l | tr -d ' ')"
 					if [ "$live_panes" = "$expected_panes" ]; then
 						matched="true"

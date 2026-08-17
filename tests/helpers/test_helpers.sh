@@ -29,6 +29,14 @@ touch_days_ago() { # days file
 	else
 		ts="$(date -d "$days days ago" +%Y%m%d%H%M.%S)"
 	fi
+	# Fail loudly, not silently: a bad $ts here would otherwise make touch
+	# either error quietly (caller ignores the exit code) or - worse - no-op
+	# and leave the file's mtime unchanged, which is exactly the failure mode
+	# this helper exists to fix (a file meant to look "old" silently doesn't).
+	if [ -z "$ts" ]; then
+		echo "touch_days_ago: failed to compute a timestamp for '$days days ago'" >&2
+		return 1
+	fi
 	touch -t "$ts" "$file"
 }
 

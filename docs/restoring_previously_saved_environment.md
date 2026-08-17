@@ -36,12 +36,13 @@ It's the bulk counterpart to `scripts/save.sh all`, which
 `@persist-save-on-exit`'s hooks already use for the same reason (no single
 "current session" to target).
 
-One thing it deliberately skips: which pane/window has focus in each
-restored session. That needs a real attached client (`switch-client`), which
-usually doesn't exist yet at the point you'd run this - right after starting
-a fresh, otherwise-empty tmux server. Every session, window and pane still
-comes back; you just land on each window's default pane rather than
-whichever one was focused when it was saved.
+Which pane/window/session had focus is restored too. That needs a real
+attached client (`switch-client`), which usually doesn't exist yet at the
+point you'd run this - right after starting a fresh, otherwise-empty tmux
+server. If no client is attached yet, focus restoration is deferred until
+one actually attaches; everything else (sessions, windows, panes, working
+directories, layout, foreground processes) comes back immediately either
+way.
 
 There's no key binding for this (same as `save.sh all`, which is also
 script/hook-only) - run it directly, or wire it into your own tmux startup

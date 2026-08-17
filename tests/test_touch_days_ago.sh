@@ -10,7 +10,18 @@ source "$(dirname "$0")/helpers/test_helpers.sh"
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/touch-days-ago-test.XXXXXX")"
 
 now_epoch() { date +%s; }
-mtime_epoch() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1"; }
+# Reads a file's mtime as a unix epoch, portably across BSD (macOS) and GNU
+# stat. The BSD-first ordering used to matter here: BSD stat's -f means
+# "-f format" (a custom output string, where %m is mtime), but GNU
+# coreutils stat's -f means something unrelated - report FILESYSTEM status
+# instead of file status, where %m means mount point instead. Trying BSD's
+# form first and falling back to GNU's on failure doesn't work, because
+# GNU's stat -f doesn't fail on the wrong platform - it exits 0 and prints
+# filesystem info that looks superficially plausible but corrupts any
+# arithmetic that consumes it, so the fallback never triggers. Trying GNU's
+# form first instead fixes this: on BSD, stat -c fails cleanly ("illegal
+# option"), correctly triggering the fallback to the BSD form.
+mtime_epoch() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; }
 
 assert_close_to_now_minus() { # days file label
 	local days="$1" file="$2" label="$3"

@@ -25,8 +25,9 @@ No configuration is required. You should feel like you never quit tmux.
 It even (optionally)
 [restores vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)!
 
-Automatic restoring and continuous saving of tmux env is also possible with
-[tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) plugin.
+Automatic saving and restoring already happens on its own (see below) - no
+extra plugin needed for that. For periodic saving on a fixed timer,
+independent of any attached client, see "Other goodies" below.
 
 ### Screencast
 
@@ -160,6 +161,13 @@ You should now be able to use the plugin.
   opening highlighted file or a url
 - [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) - automatic
   restoring and continuous saving of tmux env
+  (note: its automatic save/restore trigger doesn't currently work with
+  tmux-persist - it looks for `@resurrect-save-script-path`, which
+  tmux-persist doesn't set, so that specific feature silently no-ops here)
+- [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
+  periodic full-fleet saves via a macOS launchd timer, independent of any
+  attached client (covers a hard crash mid-session, not just clean
+  detach/exit) - fills the gap left by tmux-continuum above
 
 ### Reporting bugs and contributing
 

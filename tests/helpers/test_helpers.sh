@@ -16,6 +16,22 @@ TEST_PERSIST_DIR=""
 
 tmuxp() { tmux -L "$TEST_SOCKET" "$@"; }
 
+# Sets a file's mtime to N days in the past, portably across BSD (macOS) and
+# GNU touch/date. GNU's `touch -d "N days ago"` relies on GNU date's flexible
+# parser; BSD touch also has a -d flag, but it only accepts a strict ISO 8601
+# timestamp, not relative English phrases, so that form silently errors on
+# macOS. -t [[CC]YY]MMDDhhmm[.SS] is accepted identically by both, so compute
+# the target with whichever `date` dialect is present and feed touch that.
+touch_days_ago() { # days file
+	local days="$1" file="$2" ts
+	if date -v-1d >/dev/null 2>&1; then
+		ts="$(date -v-"${days}"d +%Y%m%d%H%M.%S)"
+	else
+		ts="$(date -d "$days days ago" +%Y%m%d%H%M.%S)"
+	fi
+	touch -t "$ts" "$file"
+}
+
 setup() {
 	TEST_PERSIST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/persist-test.XXXXXX")"
 	tmux -L "$TEST_SOCKET" kill-server 2>/dev/null

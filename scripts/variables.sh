@@ -7,11 +7,13 @@ default_restore_key="C-r"
 restore_option="@persist-restore"
 restore_path_option="@persist-restore-script-path"
 
-# Legacy option name tmux-continuum reads to find a save script to invoke on
-# its own periodic timer. Exposed for cross-compat; see
-# scripts/continuum_save_compat.sh for why this isn't just save_path_option
-# again, and docs/continuum_compat.md for why there's no restore equivalent.
+# Legacy option names tmux-continuum reads to find a save/restore script to
+# invoke - the periodic timer for save, boot-time for restore. Exposed for
+# cross-compat; see scripts/continuum_save_compat.sh and
+# scripts/continuum_restore_compat.sh for why these aren't just
+# save_path_option/restore_path_option again.
 continuum_save_path_option="@resurrect-save-script-path"
+continuum_restore_path_option="@resurrect-restore-script-path"
 
 # default processes that are restored
 default_proc_list_option="@persist-default-processes"

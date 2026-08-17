@@ -27,19 +27,24 @@ RESTORE_LAYOUT_FILE=""
 # Arguments (any order):
 #   quiet      - produce no output and no "file not found" message (used by the
 #                auto-restore hook, which fires for every new session)
+#   all        - restore every saved session, not just one (used e.g. by a
+#                scheduled/boot-time restore with no "current session" to
+#                target - see restore_all_sessions)
 #   <session>  - restore this session instead of the current one
 # Each session is saved separately (files named "<session>_*"), so restore only
-# ever touches this one session. Without a session argument the session the
-# client is attached to is restored.
+# ever touches this one session. Without "all" or a session argument the
+# session the client is attached to is restored.
 RESTORE_SESSION=""
 RESTORE_QUIET="false"
+RESTORE_ALL="false"
 for arg in "$@"; do
 	case "$arg" in
 		quiet) RESTORE_QUIET="true" ;;
+		all) RESTORE_ALL="true" ;;
 		*) RESTORE_SESSION="$arg" ;;
 	esac
 done
-if [ -z "$RESTORE_SESSION" ]; then
+if [ "$RESTORE_ALL" != "true" ] && [ -z "$RESTORE_SESSION" ]; then
 	RESTORE_SESSION="$(tmux display-message -p "#{client_session}")"
 fi
 
@@ -58,6 +63,20 @@ check_saved_session_exists() {
 		[ "$RESTORE_QUIET" = "true" ] || display_message "Tmux persist file not found!"
 		return 1
 	fi
+}
+
+# Every session with a saved snapshot, decoded back to its real (unsanitized)
+# name. "<session>_last" filenames are already sanitized (see
+# _sanitize_session_for_path in helpers.sh), so this is the read-side
+# counterpart of how save.sh names them.
+all_saved_session_names() {
+	shopt -s nullglob
+	local link session
+	for link in "$(persist_dir)/"*_last; do
+		session="$(basename "$link")"
+		session="${session%_last}"
+		_unsanitize_session_from_path "$session"
+	done
 }
 
 pane_exists() {
@@ -334,10 +353,20 @@ restore_zoomed_windows() {
 		done
 }
 
+# Creates each grouped session (tmux new-session -t, socket-targeted - no
+# attached client needed). Restoring which window is active/alternate in it
+# is a separate step; see restore_active_and_alternate_windows_for_all_grouped_sessions.
 restore_grouped_sessions() {
 	while read line; do
 		if is_line_type "grouped_session" "$line"; then
 			restore_grouped_session "$line"
+		fi
+	done < "$RESTORE_LAYOUT_FILE"
+}
+
+restore_active_and_alternate_windows_for_all_grouped_sessions() {
+	while read line; do
+		if is_line_type "grouped_session" "$line"; then
 			restore_active_and_alternate_windows_for_grouped_sessions "$line"
 		fi
 	done < "$RESTORE_LAYOUT_FILE"
@@ -362,18 +391,27 @@ show_output() {
 	[ "$RESTORE_QUIET" != "true" ]
 }
 
-main() {
-	if supported_tmux_version_ok && check_saved_session_exists; then
+# Session/window/pane structure, properties and processes. Safe to run with
+# no attached client - nothing in here calls switch-client. Shared between
+# restore_one_session and restore_all_sessions.
+restore_structure() {
+	restore_all_panes
+	restore_window_properties >/dev/null 2>&1
+	execute_hook "pre-restore-pane-processes"
+	restore_all_pane_processes
+	restore_zoomed_windows
+	restore_grouped_sessions
+}
+
+restore_one_session() {
+	if check_saved_session_exists; then
 		show_output && start_spinner "Restoring..." "Tmux restore complete!"
 		execute_hook "pre-restore-all"
-		restore_all_panes
-		restore_window_properties >/dev/null 2>&1
-		execute_hook "pre-restore-pane-processes"
-		restore_all_pane_processes
-		# below functions restore exact cursor positions
+		restore_structure
+		# below functions restore exact cursor positions - need a real
+		# attached client (switch-client)
 		restore_active_pane_for_each_window
-		restore_zoomed_windows
-		restore_grouped_sessions  # also restores active and alt windows for grouped sessions
+		restore_active_and_alternate_windows_for_all_grouped_sessions
 		restore_active_and_alternate_windows
 		cleanup_restored_pane_contents
 		execute_hook "post-restore-all"
@@ -381,6 +419,44 @@ main() {
 			stop_spinner
 			display_message "Tmux restore complete!"
 		fi
+	fi
+}
+
+# Restores every saved session in one pass (see all_saved_session_names).
+# Deliberately does not restore which pane/window has focus (the three
+# calls restore_one_session makes after restore_structure): "the" active
+# pane/window doesn't have a coherent meaning across many sessions restored
+# in one bulk pass, and those calls need a real attached client, which
+# typically doesn't exist yet at the trigger points this mode is for (tmux
+# startup, a scheduled job, tmux-continuum's boot-restore).
+restore_all_sessions() {
+	local session restored_any="false"
+	while IFS= read -r session; do
+		[ -n "$session" ] || continue
+		RESTORE_SESSION="$session"
+		if check_saved_session_exists; then
+			restored_any="true"
+			execute_hook "pre-restore-all"
+			restore_structure
+			cleanup_restored_pane_contents
+			execute_hook "post-restore-all"
+		fi
+	done < <(all_saved_session_names)
+	if [ "$RESTORE_QUIET" != "true" ]; then
+		if [ "$restored_any" = "true" ]; then
+			display_message "Tmux restore complete (all sessions)!"
+		else
+			display_message "No saved tmux-persist sessions found!"
+		fi
+	fi
+}
+
+main() {
+	supported_tmux_version_ok || return
+	if [ "$RESTORE_ALL" = "true" ]; then
+		restore_all_sessions
+	else
+		restore_one_session
 	fi
 }
 main

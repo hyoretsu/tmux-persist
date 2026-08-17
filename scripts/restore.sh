@@ -42,20 +42,27 @@ RESTORE_LAYOUT_FILE=""
 #                scheduled/boot-time restore with no "current session" to
 #                target - see restore_all_sessions)
 #   <session>  - restore this session instead of the current one
+#   _deferred_focus_restore - internal, not user-facing: restores which
+#              pane/window/session had focus for every saved session, without
+#              re-restoring structure. Installed as a one-shot client-attached
+#              hook by restore_all_sessions() when no client is attached at
+#              bulk-restore time - see restore_focus_for_all_saved_sessions.
 # Each session is saved separately (files named "<session>_*"), so restore only
 # ever touches this one session. Without "all" or a session argument the
 # session the client is attached to is restored.
 RESTORE_SESSION=""
 RESTORE_QUIET="false"
 RESTORE_ALL="false"
+RESTORE_DEFERRED_FOCUS="false"
 for arg in "$@"; do
 	case "$arg" in
 		quiet) RESTORE_QUIET="true" ;;
 		all) RESTORE_ALL="true" ;;
+		_deferred_focus_restore) RESTORE_DEFERRED_FOCUS="true" ;;
 		*) RESTORE_SESSION="$arg" ;;
 	esac
 done
-if [ "$RESTORE_ALL" != "true" ] && [ -z "$RESTORE_SESSION" ]; then
+if [ "$RESTORE_ALL" != "true" ] && [ "$RESTORE_DEFERRED_FOCUS" != "true" ] && [ -z "$RESTORE_SESSION" ]; then
 	RESTORE_SESSION="$(tmux display-message -p "#{client_session}")"
 fi
 
@@ -577,6 +584,19 @@ restore_all_sessions() {
 		fi
 	done
 
+	# Focus (which pane/window/session was active) needs a real attached
+	# client to restore (switch-client) - restore it now if one already
+	# exists, or defer to the moment one actually attaches if not. See
+	# restore_focus_for_all_saved_sessions for why and how.
+	if [ "$any_saved" = "true" ]; then
+		if tmux list-clients 2>/dev/null | \grep -q .; then
+			restore_focus_for_all_saved_sessions
+		else
+			tmux set-hook -g client-attached \
+				"run-shell \"$CURRENT_DIR/restore.sh _deferred_focus_restore quiet\"" 2>/dev/null
+		fi
+	fi
+
 	if [ "$any_failed" = "true" ]; then
 		echo "tmux-persist: restore all - gave up on ${#failed_sessions[@]} session(s) that never matched their saved pane count: ${failed_sessions[*]}" >&2
 	fi
@@ -592,9 +612,44 @@ restore_all_sessions() {
 	fi
 }
 
+# Restores which pane/window/session had focus for every saved session,
+# without re-restoring structure - structure is assumed already restored
+# (e.g. by a prior restore_all_sessions() call in this same bulk pass).
+# Re-extracts each session's permanent snapshot rather than relying on the
+# earlier bulk pass's staging area, since that's already been cleaned up
+# (cleanup_restored_pane_contents) by the time this runs.
+#
+# This is what restore_all_sessions() calls directly if a client is already
+# attached, or installs as a one-shot client-attached hook to call later if
+# not: the three focus-restoring functions below all need a real attached
+# client to mean anything (they use switch-client), and there usually isn't
+# one yet at bulk restore's own trigger points (tmux startup, a scheduled
+# job, tmux-continuum's boot-restore). When invoked via the hook, removes
+# the hook as its first action, so it only ever runs once - a later
+# reattach, after the user has manually changed focus, must not silently
+# revert it back to what was saved.
+restore_focus_for_all_saved_sessions() {
+	tmux set-hook -gu client-attached 2>/dev/null
+	local session
+	while IFS= read -r session; do
+		[ -n "$session" ] || continue
+		[ -e "$(last_session_file "$session")" ] || continue
+		RESTORE_SESSION="$session"
+		snapshot_extract "$session"
+		RESTORE_LAYOUT_FILE="$(snapshot_layout_file "restore")"
+		[ -f "$RESTORE_LAYOUT_FILE" ] || continue
+		restore_active_pane_for_each_window
+		restore_active_and_alternate_windows_for_all_grouped_sessions
+		restore_active_and_alternate_windows
+		cleanup_restored_pane_contents
+	done < <(all_saved_session_names)
+}
+
 main() {
 	supported_tmux_version_ok || return
-	if [ "$RESTORE_ALL" = "true" ]; then
+	if [ "$RESTORE_DEFERRED_FOCUS" = "true" ]; then
+		restore_focus_for_all_saved_sessions
+	elif [ "$RESTORE_ALL" = "true" ]; then
 		restore_all_sessions
 	else
 		restore_one_session

@@ -234,6 +234,113 @@ clear_sabotage_hook() {
 	done
 }
 
+# --- window/pane focus inspection (added for deferred-focus-restore tests) ---
+#
+# Server-side "active window"/"active pane" state exists independent of any
+# attached client (tmux tracks exactly one active window per session and one
+# active pane per window regardless of whether a client is looking at them),
+# so these can be read headlessly, without needing a real attached client.
+# Mirrors save.sh's own get_active_window_index/get_alternate_window_index.
+active_window_index() { # session
+	tmuxp list-windows -t "$1" -F "#{window_active} #{window_index}" 2>/dev/null |
+		awk '$1 == 1 { print $2 }'
+}
+
+alternate_window_index() { # session
+	tmuxp list-windows -t "$1" -F "#{window_flags} #{window_index}" 2>/dev/null |
+		awk '$1 ~ /-/ { print $2 }'
+}
+
+active_pane_index() { # session:window
+	tmuxp list-panes -t "$1" -F "#{pane_active} #{pane_index}" 2>/dev/null |
+		awk '$1 == 1 { print $2 }'
+}
+
+# --- control-mode client helpers (added for deferred-focus-restore tests) ---
+#
+# `tmux -C attach-session` (control mode) is a real attached client with no
+# real TTY needed - confirmed empirically: it fires tmux's native
+# client-attached hook and shows up in `list-clients` exactly like a normal
+# interactive attach. Left with stdin already at EOF, though, it exits
+# (`%exit`) immediately after attaching, before anything can rely on it
+# still being attached. Holding its stdin open against a FIFO that we also
+# hold open on our side (`exec N<>fifo`, both ends) keeps it attached
+# indefinitely, until we explicitly close our end and kill it.
+CONTROL_CLIENT_RECORDS=()
+_control_client_next_fd=20
+# Out-parameter set by attach_control_client, since it must be called as a
+# plain statement, NOT via "$(...)" - command substitution forks a subshell,
+# and this function mutates globals (CONTROL_CLIENT_RECORDS,
+# _control_client_next_fd) that a subshell's copy would silently discard on
+# exit, leaving the real (parent-shell) bookkeeping stuck empty forever and
+# every call colliding on the same fifo/fd (confirmed directly: that's
+# exactly what happened before this was switched to an out-parameter).
+CONTROL_CLIENT_PID=""
+
+# Attaches a persistent control-mode client to session $1 and blocks until
+# the server actually registers it. Sets $CONTROL_CLIENT_PID to the client
+# process's pid (pass it to detach_control_client later). Call as a plain
+# statement: `attach_control_client foo; local pid="$CONTROL_CLIENT_PID"` -
+# NOT `pid="$(attach_control_client foo)"` (see CONTROL_CLIENT_PID above).
+attach_control_client() { # session
+	local session="$1"
+	# mktemp -u for a guaranteed-unique path per call, rather than deriving
+	# one from the record count - safe even if a call is ever made from a
+	# subshell (where mutations to CONTROL_CLIENT_RECORDS itself are lost,
+	# but two calls must still never collide on the same fifo path).
+	local fifo out
+	fifo="$(mktemp -u "$TEST_PERSIST_DIR/.ctrl-fifo.XXXXXX")"
+	out="$(mktemp -u "$TEST_PERSIST_DIR/.ctrl-out.XXXXXX")"
+	mkfifo "$fifo"
+	local fd=$_control_client_next_fd
+	_control_client_next_fd=$((_control_client_next_fd + 1))
+	eval "exec ${fd}<>'$fifo'"
+	eval "tmuxp -C attach-session -t '$session' <&${fd} >'$out' 2>&1 &"
+	local pid=$!
+	CONTROL_CLIENT_RECORDS+=("${pid}:${fd}:${fifo}")
+	local target_count="${#CONTROL_CLIENT_RECORDS[@]}" i=0
+	while [ "$i" -lt 25 ]; do
+		[ "$(tmuxp list-clients 2>/dev/null | \grep -c 'control-mode')" -ge "$target_count" ] && break
+		sleep 0.2
+		i=$((i + 1))
+	done
+	CONTROL_CLIENT_PID="$pid"
+}
+
+# Detaches one control client previously returned by attach_control_client:
+# closes our side of its stdin fifo (so the client sees EOF), kills the
+# process if it hasn't already exited, and removes the fifo file.
+detach_control_client() { # pid
+	local target="$1" rec pid fd fifo
+	local -a keep=()
+	for rec in "${CONTROL_CLIENT_RECORDS[@]}"; do
+		pid="${rec%%:*}"
+		if [ "$pid" = "$target" ]; then
+			fd="${rec#*:}"; fd="${fd%%:*}"
+			fifo="${rec##*:}"
+			eval "exec ${fd}>&-" 2>/dev/null
+			kill "$pid" 2>/dev/null
+			wait "$pid" 2>/dev/null
+			rm -f "$fifo"
+		else
+			keep+=("$rec")
+		fi
+	done
+	CONTROL_CLIENT_RECORDS=("${keep[@]}")
+}
+
+# Detaches every control client still tracked from attach_control_client.
+# teardown() itself only kills the tmux server - it knows nothing about
+# these background client processes/fifos, so test files call this
+# themselves first.
+detach_all_control_clients() {
+	local rec pid
+	for rec in "${CONTROL_CLIENT_RECORDS[@]}"; do
+		pid="${rec%%:*}"
+		detach_control_client "$pid"
+	done
+}
+
 # Polls condition command $2.. every 0.2s until it exits 0 or $1 seconds pass.
 # Returns the condition's last exit status. Used instead of a fixed sleep when
 # the wait time itself varies by design (e.g. a retry give-up whose length

@@ -18,6 +18,17 @@ EXISTING_PANES_VAR=""
 
 RESTORING_FROM_SCRATCH="false"
 
+# Whether detect_if_restoring_from_scratch() has already made its determination
+# for the CURRENT session. Guards against re-detecting on a retry: that check's
+# "exactly 1 live pane -> treat as fresh, overwrite it" heuristic is only valid
+# on a session's first restore attempt. On a retry (restore_all_sessions()'s
+# race-guard - see restore_structure_properties()), a session that's been
+# reduced to 1 pane got there via a PARTIAL prior restore attempt, not a fresh
+# empty session - re-running the detection would wrongly flag it as "from
+# scratch" and overwrite that surviving pane's content. Reset to "false"
+# once per session (not per attempt) by restore_all_sessions().
+RESTORE_FROM_SCRATCH_CHECKED="false"
+
 RESTORE_PANE_CONTENTS="false"
 
 # Path to the extracted layout file of the snapshot being restored. Set once the
@@ -226,6 +237,16 @@ restore_pane() {
 				local pane_id="$(tmux display-message -p -F "#{pane_id}" -t "$session_name:$window_number")"
 				new_pane "$session_name" "$window_number" "$dir" "$pane_index"
 				tmux kill-pane -t "$pane_id"
+				# Self-disabling, not just "happens only for the first pane in a
+				# single pass" as the comment above describes: restore_all_sessions()
+				# can call restore_all_panes() again on retry (see
+				# RESTORE_FROM_SCRATCH_CHECKED), at which point every pane this
+				# function already created on a prior attempt now "exists" too -
+				# without resetting this here, every one of them would hit this
+				# same overwrite branch again on the next attempt instead of the
+				# safe register_existing_pane path below, repeatedly splitting and
+				# killing panes that were already correctly restored.
+				RESTORING_FROM_SCRATCH="false"
 			else
 				# Pane exists, no need to create it!
 				# Pane existence is registered. Later, its process also won't be restored.
@@ -275,6 +296,11 @@ detect_if_restoring_from_scratch() {
 	if never_ever_overwrite; then
 		return
 	fi
+	# Only ever make this determination once per session - see
+	# RESTORE_FROM_SCRATCH_CHECKED's declaration for why re-running it on a
+	# retry would be wrong.
+	[ "$RESTORE_FROM_SCRATCH_CHECKED" = "true" ] && return
+	RESTORE_FROM_SCRATCH_CHECKED="true"
 	# "From scratch" means the target session is freshly created (a single
 	# pane). In that case its lone pane is overwritten by the restore.
 	local total_number_of_panes="$(tmux list-panes -t "$RESTORE_SESSION" 2>/dev/null | wc -l | sed 's/ //g')"
@@ -391,16 +417,30 @@ show_output() {
 	[ "$RESTORE_QUIET" != "true" ]
 }
 
-# Session/window/pane structure, properties and processes. Safe to run with
-# no attached client - nothing in here calls switch-client. Shared between
-# restore_one_session and restore_all_sessions.
-restore_structure() {
-	restore_all_panes
+# Everything restore_structure() does AFTER pane/window creation: setting
+# properties on windows that now exist, restoring processes, zoom state and
+# grouped sessions. Unlike restore_all_panes() (idempotent - only creates
+# what's missing), these are NOT safe to blindly re-run: restore_zoomed_windows
+# uses `resize-pane -Z`, a toggle, so calling it twice on an already-correctly
+# zoomed window un-zooms it; restore_grouped_sessions creates each grouped
+# session unconditionally and errors "duplicate session" if it already exists.
+# Kept separate from restore_all_panes so restore_all_sessions() can retry
+# only the idempotent, race-prone creation step and run this exactly once
+# regardless of how many creation attempts it took.
+restore_structure_properties() {
 	restore_window_properties >/dev/null 2>&1
 	execute_hook "pre-restore-pane-processes"
 	restore_all_pane_processes
 	restore_zoomed_windows
 	restore_grouped_sessions
+}
+
+# Session/window/pane structure, properties and processes. Safe to run with
+# no attached client - nothing in here calls switch-client. Shared between
+# restore_one_session and restore_all_sessions.
+restore_structure() {
+	restore_all_panes
+	restore_structure_properties
 }
 
 restore_one_session() {
@@ -422,6 +462,27 @@ restore_one_session() {
 	fi
 }
 
+# Pane count recorded in a session's own saved snapshot layout, read straight
+# from its "_last" file (not the restore staging area) - format-detected the
+# same way snapshot_extract() does (tgz vs a plain layout file), since a
+# separate-format snapshot ("@persist-snapshot-format separate") is a plain
+# text file, not an archive: `tar xzOf` on it fails and would otherwise
+# silently read as 0 panes for every such session, deflating the whole
+# fleet's retry budget without any error. Used both for the upfront
+# fleet-wide pane budget and, per session, as part of that session's
+# expected count. An unreadable/missing snapshot yields 0 rather than
+# aborting.
+_saved_session_pane_count() {
+	local session="$1" last target
+	last="$(last_session_file "$session")"
+	[ -e "$last" ] || { echo 0; return; }
+	target="$(readlink "$last")"
+	case "$target" in
+		*.tgz) tar xzOf "$last" ./layout 2>/dev/null | \grep -c $'^pane\t' ;;
+		*) \grep -c $'^pane\t' "$last" 2>/dev/null ;;
+	esac
+}
+
 # Restores every saved session in one pass (see all_saved_session_names).
 # Deliberately does not restore which pane/window has focus (the three
 # calls restore_one_session makes after restore_structure): "the" active
@@ -429,24 +490,104 @@ restore_one_session() {
 # in one bulk pass, and those calls need a real attached client, which
 # typically doesn't exist yet at the trigger points this mode is for (tmux
 # startup, a scheduled job, tmux-continuum's boot-restore).
+#
+# A `tmux kill-server` used to recreate a bulk-restore source session returns
+# before the server finishes reaping child panes (measured ~33ms/pane), so a
+# session can start restoring while its old panes are still mid-teardown on
+# the same socket, and silently lose or partially restore it. To guard against
+# that, each session's restore is verified (live pane count vs. the count
+# recorded in its own snapshot) and retried with exponential backoff on
+# mismatch, up to a give-up budget that scales with the whole fleet's total
+# saved pane count - a bigger bulk restore is expected to see more server
+# contention, so it gets more time to settle. Each session's retry sequence is
+# independent: there is no global give-up flag, so one persistently-broken
+# session never shortens or suppresses retries for any other session in the
+# same run.
 restore_all_sessions() {
-	local session restored_any="false"
+	local session
+	local -a saved_sessions=()
+	local total_expected_panes=0 pane_count
+
 	while IFS= read -r session; do
 		[ -n "$session" ] || continue
+		saved_sessions+=("$session")
+		pane_count="$(_saved_session_pane_count "$session")"
+		total_expected_panes=$((total_expected_panes + pane_count))
+	done < <(all_saved_session_names)
+
+	# Give-up budget (ms) for one session's retry sequence: twice the teardown
+	# time the whole fleet's worth of panes could plausibly still be taking
+	# (~33ms/pane, doubled for headroom).
+	local retry_budget_ms=$((total_expected_panes * 33 * 2))
+
+	local any_saved="false" any_failed="false"
+	local -a failed_sessions=()
+
+	for session in "${saved_sessions[@]}"; do
 		RESTORE_SESSION="$session"
 		if check_saved_session_exists; then
-			restored_any="true"
+			any_saved="true"
 			execute_hook "pre-restore-all"
-			restore_structure
+			# Reset once per session (not per retry attempt below) - see
+			# RESTORE_FROM_SCRATCH_CHECKED's declaration.
+			RESTORING_FROM_SCRATCH="false"
+			RESTORE_FROM_SCRATCH_CHECKED="false"
+			# Retry only the idempotent creation step (restore_all_panes) - the
+			# rest of restore_structure() (window properties, zoom, grouped
+			# sessions) is not safe to re-run and happens exactly once below,
+			# after this converges or the budget is exhausted.
+			restore_all_panes
+
+			local expected_panes live_panes matched="false"
+			expected_panes="$(\grep -c $'^pane\t' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
+			live_panes="$(tmux list-panes -s -t "$session" 2>/dev/null | wc -l | tr -d ' ')"
+
+			if [ "$live_panes" = "$expected_panes" ]; then
+				matched="true"
+			else
+				local backoff_ms=200 cumulative_ms=0
+				while [ "$cumulative_ms" -lt "$retry_budget_ms" ]; do
+					sleep "$(awk -v ms="$backoff_ms" 'BEGIN { printf "%.3f", ms / 1000 }')"
+					cumulative_ms=$((cumulative_ms + backoff_ms))
+					restore_all_panes
+					expected_panes="$(\grep -c $'^pane\t' "$RESTORE_LAYOUT_FILE" 2>/dev/null)"
+					live_panes="$(tmux list-panes -s -t "$session" 2>/dev/null | wc -l | tr -d ' ')"
+					if [ "$live_panes" = "$expected_panes" ]; then
+						matched="true"
+						break
+					fi
+					backoff_ms=$((backoff_ms * 2))
+				done
+			fi
+
+			# Runs once regardless of how many restore_all_panes attempts it
+			# took above - best effort even if panes are still missing after
+			# exhausting the budget, rather than leaving window properties/
+			# processes/zoom entirely unset on top of an already-degraded session.
+			restore_structure_properties
 			cleanup_restored_pane_contents
 			execute_hook "post-restore-all"
+
+			if [ "$matched" = "true" ]; then
+				:
+			else
+				any_failed="true"
+				failed_sessions+=("$session")
+			fi
 		fi
-	done < <(all_saved_session_names)
+	done
+
+	if [ "$any_failed" = "true" ]; then
+		echo "tmux-persist: restore all - gave up on ${#failed_sessions[@]} session(s) that never matched their saved pane count: ${failed_sessions[*]}" >&2
+	fi
+
 	if [ "$RESTORE_QUIET" != "true" ]; then
-		if [ "$restored_any" = "true" ]; then
-			display_message "Tmux restore complete (all sessions)!"
-		else
+		if [ "$any_saved" != "true" ]; then
 			display_message "No saved tmux-persist sessions found!"
+		elif [ "$any_failed" = "true" ]; then
+			display_message "Tmux restore complete (some sessions failed to verify)!"
+		else
+			display_message "Tmux restore complete (all sessions)!"
 		fi
 	fi
 }

@@ -55,3 +55,15 @@ command embedded in tmux's `status-right` format string, so it only executes
 while a client is attached and the status line is actually rendering. It
 does not run with nothing attached anywhere - that's a structural property
 of how continuum triggers itself, not something this wrapper changes.
+
+## If you're running tmux-resurrect and tmux-persist side by side
+
+`@resurrect-save-script-path` is set unconditionally on every load, with no
+option to opt out. For the overwhelming majority of setups (migrating from
+tmux-resurrect to tmux-persist, or never having used tmux-resurrect at all)
+that's harmless - it's not a namespace either plugin's users configure by
+hand. If you deliberately run both plugins together and rely on
+tmux-resurrect's own value for this option, tmux-persist will silently
+overwrite it on every load. This is an accepted, narrow limitation rather
+than something worth adding a config knob for, given how unlikely that
+combination is - open an issue if it affects you in practice.

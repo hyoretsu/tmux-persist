@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compatibility target for tmux-continuum's boot-time restore. See
-# docs/continuum_compat.md for the full explanation.
+# docs/continuum_compat.md for what this gets you and its caveats.
 #
 # tmux-continuum invokes "$resurrect_restore_script_path" directly, with no
 # arguments, right after the tmux server starts - before any session exists

@@ -169,9 +169,10 @@ You should now be able to use the plugin.
 - [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
   periodic full-fleet saves via a macOS launchd timer, independent of any
   attached client (covers a hard crash mid-session, not just clean
-  detach/exit) - an alternative to continuum's save trigger above, portable
-  to any OS with launchd/systemd support versus continuum's
-  status-line-rendering dependency
+  detach/exit) - an alternative to continuum's save trigger above. macOS
+  only as shipped; the underlying save script is plain bash, so it's
+  adaptable to a systemd --user timer on Linux, but that's not provided
+  out of the box
 
 ### Reporting bugs and contributing
 

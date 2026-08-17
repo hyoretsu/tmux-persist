@@ -163,20 +163,12 @@ You should now be able to use the plugin.
 - [tmux-open](https://github.com/tmux-plugins/tmux-open) - a plugin for quickly
   opening highlighted file or a url
 - [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) - automatic
-  restoring and continuous saving of tmux env
-  (note: both its periodic *save* and its boot-time *restore* work with
-  tmux-persist via small compatibility wrappers - see
-  [tmux-continuum compatibility](docs/continuum_compat.md))
+  restoring and continuous saving of tmux env; both work with tmux-persist via
+  small compatibility wrappers, see [tmux-continuum compatibility](docs/continuum_compat.md)
 - [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
-  periodic full-fleet saves via a macOS launchd timer. With an attached
-  client, this covers the same crash-protection ground as continuum's save
-  trigger above (both catch a crash within one interval) - its actual edge
-  over continuum is sessions with *no* attached client anywhere: continuum's
-  trigger is a command embedded in the status-line format string, so it can
-  only ever fire while something is attached and rendering it; a real OS
-  timer doesn't have that restriction. macOS only as shipped; the
-  underlying save script is plain bash, so it's adaptable to a systemd
-  --user timer on Linux, but that's not provided out of the box
+  save-only supplement to continuum: crash-protects long-running background
+  work (e.g. server-side scripts) even if no terminal is open; continuum
+  requires an attached terminal
 
 ### Reporting bugs and contributing
 

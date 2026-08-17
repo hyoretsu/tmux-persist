@@ -167,12 +167,15 @@ You should now be able to use the plugin.
   restore has no attached client to begin with, which runs into the
   existing #31 regardless of anything continuum does)
 - [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
-  periodic full-fleet saves via a macOS launchd timer, independent of any
-  attached client (covers a hard crash mid-session, not just clean
-  detach/exit) - an alternative to continuum's save trigger above. macOS
-  only as shipped; the underlying save script is plain bash, so it's
-  adaptable to a systemd --user timer on Linux, but that's not provided
-  out of the box
+  periodic full-fleet saves via a macOS launchd timer. With an attached
+  client, this covers the same crash-protection ground as continuum's save
+  trigger above (both catch a crash within one interval) - its actual edge
+  over continuum is sessions with *no* attached client anywhere: continuum's
+  trigger is a command embedded in the status-line format string, so it can
+  only ever fire while something is attached and rendering it; a real OS
+  timer doesn't have that restriction. macOS only as shipped; the
+  underlying save script is plain bash, so it's adaptable to a systemd
+  --user timer on Linux, but that's not provided out of the box
 
 ### Reporting bugs and contributing
 

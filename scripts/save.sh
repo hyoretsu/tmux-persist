@@ -277,7 +277,7 @@ save_session() {
 
 	# Build the snapshot in the staging area: ./layout (+ ./pane_contents/).
 	rm -rf "$(persist_dir)/save"
-	mkdir -p "$(persist_dir)/save"
+	ensure_private_dir "$(persist_dir)/save"
 
 	if is_session_grouped "$session"; then
 		# grouped sessions share the original session's layout, so we only
@@ -289,7 +289,7 @@ save_session() {
 			dump_windows "$session"
 		} > "$layout_file"
 		if [ "$CAPTURE_PANE_CONTENTS" = "on" ]; then
-			mkdir -p "$(pane_contents_dir "save")"
+			ensure_private_dir "$(pane_contents_dir "save")"
 			dump_pane_contents "$session"
 		fi
 	fi
@@ -305,7 +305,7 @@ save_session() {
 save_all() {
 	# Nothing to save (e.g. invoked with no attached client and no session arg).
 	[ "$SAVE_ALL" = "true" ] || [ -n "$SAVE_SESSION" ] || return
-	mkdir -p "$(persist_dir)"
+	ensure_private_dir "$(persist_dir)"
 	# Compute grouped-session info. It is needed so that panes/windows belonging
 	# to a grouped session are skipped (they share the original session's
 	# layout). Both are exported so save_session and its subshells can read them.

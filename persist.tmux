@@ -36,6 +36,12 @@ set_default_strategies() {
 set_script_path_options() {
 	tmux set-option -gq "$save_path_option" "$CURRENT_DIR/scripts/save.sh"
 	tmux set-option -gq "$restore_path_option" "$CURRENT_DIR/scripts/restore.sh"
+	# Cross-compat with tmux-continuum's periodic autosave, which only knows
+	# this legacy option name and only ever invokes it with a bare "quiet".
+	# Points at a wrapper, not save.sh directly - see
+	# scripts/continuum_save_compat.sh. Restore is intentionally not bridged
+	# the same way; see docs/continuum_compat.md.
+	tmux set-option -gq "$continuum_save_path_option" "$CURRENT_DIR/scripts/continuum_save_compat.sh"
 }
 
 set_save_on_exit_hooks() {

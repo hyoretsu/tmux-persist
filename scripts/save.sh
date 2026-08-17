@@ -233,7 +233,12 @@ dump_panes() {
 				continue
 			fi
 			full_command="$(pane_full_command $pane_pid)"
-			dir=$(echo $dir | sed 's/ /\\ /') # escape all spaces in directory path
+			# The path is a single tab-delimited field and restore always quotes it
+			# (`-c "$dir"`), so it is stored verbatim. The old `echo $dir | sed
+			# 's/ /\ /'` both collapsed runs of whitespace (unquoted echo) and, with
+			# no /g, escaped only the first space - and the injected backslashes then
+			# became literal characters in the quoted restore path, so any path with a
+			# space (e.g. "/Volumes/El Gato") failed to restore. (tmux-resurrect#548)
 			echo "${line_type}${d}${session_name}${d}${window_number}${d}${window_active}${d}${window_flags}${d}${pane_index}${d}${pane_title}${d}${dir}${d}${pane_active}${d}${pane_command}${d}:${full_command}"
 		done
 }

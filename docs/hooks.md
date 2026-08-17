@@ -24,6 +24,11 @@ Currently the following hooks are supported:
 
   Called before running processes are restored.
 
+- `@persist-hook-post-restore-all`
+
+  Called at end of restore process, once per session (so once per saved
+  session when restoring `all`, not once total).
+
 ### Examples
 
 Here is an example how to save and restore window geometry for most terminals in X11.

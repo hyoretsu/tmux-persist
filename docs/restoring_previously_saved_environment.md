@@ -1,13 +1,16 @@
 # Restoring previously saved environment
 
 Each session is saved separately. The files for a session named `foo` look
-like this (one timestamped snapshot per save, plus a `foo_last` symlink to the
-most recent one and a `foo_pane_contents.tar.gz` archive):
+like this (one timestamped snapshot per save, plus a `foo_last` symlink to
+the most recent one):
 
-    foo_20260619T184107.txt
-    foo_20260619T184108.txt
-    foo_last -> foo_20260619T184108.txt
-    foo_pane_contents.tar.gz
+    foo_20260619T184107.tgz
+    foo_20260619T184108.tgz
+    foo_last -> foo_20260619T184108.tgz
+
+Each `.tgz` bundles that snapshot's layout and pane contents together - see
+[restoring pane contents](restoring_pane_contents.md) for the on-disk format,
+including the alternate `separate` layout (`@persist-snapshot-format`).
 
 None of the previous saves are deleted (unless you explicitly do that). All save
 files are kept in `~/.tmux/persist/` directory, or `~/.local/share/tmux/persist`
@@ -48,7 +51,8 @@ Here are the steps to restore a session to a previous point in time:
 
 - `$ cd ~/.tmux/persist/`
 - locate the snapshot you'd like to use for restore (file names have a timestamp)
-- point the session's `last` symlink at it: `$ ln -sf <session>_<timestamp>.txt <session>_last`
+- point the session's `last` symlink at it: `$ ln -sf <session>_<timestamp>.tgz <session>_last`
+  (`.txt` instead of `.tgz` if you're on `@persist-snapshot-format 'separate'`)
 - create a session with that name and do a restore with the `tmux-persist` key:
   `prefix + Ctrl-r`
 

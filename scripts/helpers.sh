@@ -367,17 +367,37 @@ _PERSIST_DIR="$(persist_dir)"
 # A single timestamp shared by every session saved in one save run.
 _PERSIST_TIMESTAMP="$(date +"%Y%m%dT%H%M%S")"
 
+# tmux session names may contain "/", which is not safe as a bare filename
+# component: embedded unescaped, it turns into an unintended directory
+# separator under persist_dir and the save silently fails for that session.
+# Encode it so the on-disk name always stays a single path segment. "%" is
+# escaped first so the encoding stays collision-free: without this, a session
+# literally named "a%2Fb" and a session named "a/b" would both sanitize to
+# the same string and share a snapshot.
+_sanitize_session_for_path() {
+	local s="${1//%/%25}"
+	echo "${s//\//%2F}"
+}
+
+# Reverses _sanitize_session_for_path, e.g. to recover a real session name
+# from a "<sanitized>_last" filename. Order matters: undo "%2F" before "%25"
+# (mirrors encoding "%" before "/", so the round trip is exact).
+_unsanitize_session_from_path() {
+	local s="${1//%2F//}"
+	echo "${s//%25/%}"
+}
+
 # Per-session snapshot file, e.g. "<persist-dir>/cubari_20260619T182833.tgz".
 # The session name is the file's prefix so each session is stored separately.
 session_file_path() {
-	local session="$1"
+	local session="$(_sanitize_session_for_path "$1")"
 	echo "$(persist_dir)/${session}_${_PERSIST_TIMESTAMP}.$(snapshot_extension)"
 }
 
 # Symlink pointing at the latest snapshot for a session, e.g.
 # "<persist-dir>/cubari_last".
 last_session_file() {
-	local session="$1"
+	local session="$(_sanitize_session_for_path "$1")"
 	echo "$(persist_dir)/${session}_last"
 }
 
@@ -387,7 +407,10 @@ pane_contents_dir() {
 
 pane_contents_file() {
 	local save_or_restore="$1"
-	local pane_id="$2"
+	# pane_id is "<session>:<window>.<pane>"; window/pane indices are always
+	# numeric, so any "/" or "%" in it can only come from the session name -
+	# safe to sanitize the whole string the same way session names are.
+	local pane_id="$(_sanitize_session_for_path "$2")"
 	echo "$(pane_contents_dir "$save_or_restore")/pane-${pane_id}"
 }
 
@@ -403,7 +426,9 @@ pane_contents_file_exists() {
 # every snapshot is removed the "last" symlink ends up dangling, meaning the
 # whole session is stale - so its pointer is dropped too.
 remove_old_backups() {
-	local session="$1"
+	# $1 is a raw (unsanitized) session name, matching session_file_path() and
+	# last_session_file() - sanitize once, here, rather than at each use below.
+	local session="$(_sanitize_session_for_path "$1")"
 	local delete_after="$(get_tmux_option "$delete_backup_after_option" "$default_delete_backup_after")"
 	local max_snapshots="$(get_tmux_option "$max_snapshots_option" "$default_max_snapshots")"
 	shopt -s nullglob
@@ -432,9 +457,12 @@ remove_old_backups() {
 		fi
 		i=$((i + 1))
 	done
-	local last_link="$(last_session_file "$session")"
+	# $session is already sanitized above; build the path directly instead of
+	# going through last_session_file()/snapshot_hash_file(), which would
+	# sanitize a second time and produce the wrong (double-encoded) path.
+	local last_link="$(persist_dir)/${session}_last"
 	if [ -L "$last_link" ] && [ ! -e "$last_link" ]; then
-		rm -f "$last_link" "$(snapshot_hash_file "$session")"
+		rm -f "$last_link" "${last_link}.hash"
 	fi
 }
 
@@ -445,7 +473,10 @@ prune_all_old_backups() {
 	for link in "$(persist_dir)/"*_last; do
 		session="$(basename "$link")"
 		session="${session%_last}"
-		remove_old_backups "$session"
+		# The filename is already sanitized; recover the real session name so
+		# remove_old_backups() (which sanitizes its raw-name argument itself)
+		# doesn't double-encode it.
+		remove_old_backups "$(_unsanitize_session_from_path "$session")"
 	done
 }
 
@@ -484,6 +515,14 @@ migrate_legacy_snapshots() {
 		awk -F'\t' -v s="$session" \
 			'($1=="pane"||$1=="window"||$1=="grouped_session") && $2==s' \
 			"$old_file" > "$dir/save/layout"
+		# $session is intentionally left raw (unsanitized) here: this glob
+		# matches files extracted from the *old* tmux-resurrect archive, which
+		# itself embedded the raw session name unsanitized. If $session
+		# contains "/", those legacy files were already misplaced by that
+		# older bug at capture time (nested instead of flat) - sanitizing the
+		# glob on this side wouldn't find them. nullglob (set above) means
+		# this just skips migrating pane contents for that session rather
+		# than erroring; the layout itself still migrates via the awk step.
 		for pc in "$work/pane_contents/pane-${session}:"*; do
 			mkdir -p "$dir/save/pane_contents"
 			cp "$pc" "$dir/save/pane_contents/"

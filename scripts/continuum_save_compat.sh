@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Compatibility target for tmux-continuum's periodic autosave. See
-# docs/continuum_compat.md for the full explanation of why this exists
-# instead of just pointing continuum straight at save.sh.
+# docs/continuum_compat.md for what this gets you and its caveats.
 #
 # tmux-continuum always invokes "$resurrect_save_script_path" "quiet" - never
 # "all" - because it was built against the original tmux-resurrect, whose

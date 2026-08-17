@@ -94,9 +94,22 @@ restore_existing_sessions_once() {
 
 # If the user still has any old @resurrect-* options set, they keep working
 # (see get_tmux_option), but advise migrating - once per server.
+#
+# Excludes $continuum_save_path_option: that's not a user-set legacy config
+# option, it's tmux-continuum's own integration point, which
+# set_script_path_options sets itself on every load (see there). Without
+# this exclusion, that self-set option would match "^@resurrect-" starting
+# on the plugin's *second* load onward (the first load runs this check
+# before set_script_path_options sets it) and fire a false "you have legacy
+# options" warning for every user, continuum or not - and since this is a
+# one-shot warning gated by @persist-legacy-warned, it would also permanently
+# suppress the real warning for anyone who later sets an actual legacy
+# option, since the one-shot flag would already be burned.
 warn_legacy_options() {
 	[ "$(tmux show-option -gqv @persist-legacy-warned)" = "1" ] && return
-	if tmux show-options -g 2>/dev/null | grep -q '^@resurrect-'; then
+	if tmux show-options -g 2>/dev/null |
+		\grep -v "^${continuum_save_path_option} " |
+		\grep -q '^@resurrect-'; then
 		tmux set-option -g @persist-legacy-warned 1
 		tmux display-message "tmux-persist: '@resurrect-*' options are deprecated - rename them to '@persist-*'."
 	fi

@@ -30,7 +30,7 @@ assert_eq "$(cat "$TEST_PERSIST_DIR/foo_last.hash")" "$hash1" "unchanged re-save
 
 # --- skip refreshes the existing snapshot's mtime (keeps pruning from expiring it) ---
 snap="$(snap_path)"
-touch -d "10 days ago" "$snap"
+touch_days_ago 10 "$snap"
 sleep 1.2
 save all
 assert_eq "$(find "$snap" -mtime +1 2>/dev/null | wc -l | tr -d ' ')" "0" "skip refreshes snapshot mtime"

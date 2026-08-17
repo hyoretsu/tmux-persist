@@ -81,9 +81,26 @@ setup() {
 	# Fresh server that does NOT load the user's tmux config.
 	tmuxp -f /dev/null new-session -d -s _bootstrap
 	tmuxp set -g @persist-dir "$TEST_PERSIST_DIR"
+	# A background control-mode client, kept attached for the whole test
+	# case: display_message() (scripts/helpers.sh) is plain `tmux
+	# display-message`, which needs a real attached client to render into -
+	# without one it fails "no current client" and never even logs the
+	# message, so any test checking summary text (last_displayed_message)
+	# would otherwise depend on whatever attached-client state happens to
+	# exist outside this test's own control. Confirmed to differ between
+	# environments: passed locally, failed "no current client" on CI. -C
+	# (control mode) counts as a real attached client without needing an
+	# actual terminal.
+	tmuxp -C attach-session -t _bootstrap >/dev/null 2>&1 &
+	TEST_CLIENT_PID=$!
+	sleep 0.3
 }
 
 teardown() {
+	if [ -n "${TEST_CLIENT_PID:-}" ]; then
+		kill "$TEST_CLIENT_PID" 2>/dev/null
+		TEST_CLIENT_PID=""
+	fi
 	_kill_test_server_and_wait
 	[ -n "$TEST_PERSIST_DIR" ] && rm -rf "$TEST_PERSIST_DIR"
 	TEST_PERSIST_DIR=""

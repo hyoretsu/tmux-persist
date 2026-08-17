@@ -8,7 +8,7 @@ setup
 snap() { # session timestamp [days_ago]
 	local f="$TEST_PERSIST_DIR/${1}_${2}.tgz"
 	: > "$f"
-	[ -n "$3" ] && touch -d "$3 days ago" "$f"
+	[ -n "$3" ] && touch_days_ago "$3" "$f"
 }
 
 # --- age window: old snapshot removed, newest kept (default 7 days) ---

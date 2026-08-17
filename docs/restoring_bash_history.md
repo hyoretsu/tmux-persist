@@ -1,7 +1,18 @@
-tmux-persist no longer restores shell history for each pane, as of [this PR](https://github.com/tmux-plugins/tmux-resurrect/pull/308).
+# Restoring bash history
 
-As a workaround, you can use the `HISTFILE` environment variable to preserve history for each pane separately, and modify
-`PROMPT_COMMAND` to make sure history gets saved with each new command.
+This solves a narrower problem than it sounds like. [Pane contents](restoring_pane_contents.md)
+are already captured and restored by default - but that's the *visible*
+on-screen scrollback, not your shell's real `history` - anything that
+scrolled off-screen, or commands from a previous session entirely, aren't
+in it. If you want per-pane `$HISTFILE` isolation and real persistent
+history across restores (not just what happened to still be on screen when
+it saved), read on; if on-screen scrollback is enough, you don't need this.
+
+tmux-persist itself no longer restores shell history for each pane, as of
+[this PR](https://github.com/tmux-plugins/tmux-resurrect/pull/308). As a
+workaround, you can use the `HISTFILE` environment variable to preserve
+history for each pane separately, and modify `PROMPT_COMMAND` to make sure
+history gets saved with each new command.
 
 Unfortunately, we haven't found a perfect way of getting a unique identifier for each pane, as the `TMUX_PANE` variable
 seems to occasionally change when reviving. As a workaround, the example below sets a unique ID in each pane's `title`.

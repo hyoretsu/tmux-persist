@@ -5,8 +5,10 @@
   - [Restoring Mosh](#mosh)
 
 ### General instructions <a name="general-instructions"></a>
-Only a conservative list of programs is restored by default:<br/>
-`vi vim nvim emacs man less more tail top htop irssi weechat mutt`.
+Only a conservative list of programs is restored by default - see
+`@persist-default-processes` in [the options reference](options.md) for the
+exact list, which also includes AI agent CLIs
+([details](restoring_agent_sessions.md)).
 
 This can be configured with `@persist-processes` option in `.tmux.conf`. It
 contains space-separated list of additional programs to restore.
@@ -61,8 +63,10 @@ list of programs that will be restored:
 
 Upon save, `rails server` command will actually be saved as this command:
 `/Users/user/.rbenv/versions/2.0.0-p481/bin/ruby script/rails server`
-(if you wanna see how is any command saved, check it yourself in
-`~/.tmux/persist/last` file).
+(if you wanna see how any command was saved, check it yourself: each
+session's snapshot is its own `<session>_last` file in `~/.tmux/persist/`;
+extract and search its layout with
+`tar xzOf ~/.tmux/persist/<session>_last ./layout | grep rails`).
 
 When programs are restored, the `rails server` command will NOT be restored
 because it does not **strictly** match the long
@@ -121,12 +125,11 @@ Here's the general workflow for figuring this out:
 - Set up your whole tmux environment manually.<br/>
   In our example case, we'd type `rails server` in a pane where we want it to
   run.
-- Save tmux env (it will get saved to `~/.tmux/persist/last`).
-- Open `~/.tmux/persist/last` file and try to find full process string for
-  your program.<br/>
-  Unfortunately this is a little vague but it should be easy. A smart
-  thing to do for our example is to search for string `rails` in the `last`
-  file.
+- Save the session (`prefix + Ctrl-s`) - it lands in
+  `~/.tmux/persist/<session>_last`.
+- Extract and search its layout for the full process string:
+  `tar xzOf ~/.tmux/persist/<session>_last ./layout | grep rails`.<br/>
+  Unfortunately this is a little vague but it should be easy.
 - Now that you know the full and the desired process string use tilde `~` and
   arrow `->` in `.tmux.conf` to make things work.
 
@@ -181,7 +184,7 @@ Let take a look at this example
           "~yarn gulp test->gulp test" \
           "~yarn gulp test-it->gulp test-it" \
     '
-**This will not work properly**, only `gulp test` is run, although you can see the command `node /path/to/yarn gulp test-it` is added correctly in `.tmux/persist/last` file.
+**This will not work properly**, only `gulp test` is run, although you can see the command `node /path/to/yarn gulp test-it` is added correctly in the session's saved layout (see the general workflow above for how to check).
 
 The reason is when restoring program, the **command part after the dash `-` is ignored** so instead  of command `gulp test-it`, the command `gulp test` which will be run.
 
@@ -192,7 +195,7 @@ A work around, for this problem until it's fixed, is:
           "~yarn gulp test->gulp test" \
           "~yarn gulp \"test-it\"->gulp test-it" \
 
-- and in `.tmux/persist/last`, we should add quote to `test-it` word
+- and in the session's saved layout, we should add quote to `test-it` word
 
       ... node:node /path/to/yarn gulp "test-it"
 

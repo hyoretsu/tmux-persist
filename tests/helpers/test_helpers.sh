@@ -16,18 +16,78 @@ TEST_PERSIST_DIR=""
 
 tmuxp() { tmux -L "$TEST_SOCKET" "$@"; }
 
+# Sets a file's mtime to N days in the past, portably across BSD (macOS) and
+# GNU touch/date. GNU's `touch -d "N days ago"` relies on GNU date's flexible
+# parser; BSD touch also has a -d flag, but it only accepts a strict ISO 8601
+# timestamp, not relative English phrases, so that form silently errors on
+# macOS. -t [[CC]YY]MMDDhhmm[.SS] is accepted identically by both, so compute
+# the target with whichever `date` dialect is present and feed touch that.
+touch_days_ago() { # days file
+	local days="$1" file="$2" ts
+	if date -v-1d >/dev/null 2>&1; then
+		ts="$(date -v-"${days}"d +%Y%m%d%H%M.%S)"
+	else
+		ts="$(date -d "$days days ago" +%Y%m%d%H%M.%S)"
+	fi
+	# Fail loudly, not silently: a bad $ts here would otherwise make touch
+	# either error quietly (caller ignores the exit code) or - worse - no-op
+	# and leave the file's mtime unchanged, which is exactly the failure mode
+	# this helper exists to fix (a file meant to look "old" silently doesn't).
+	if [ -z "$ts" ]; then
+		echo "touch_days_ago: failed to compute a timestamp for '$days days ago'" >&2
+		return 1
+	fi
+	touch -t "$ts" "$file"
+}
+
+# `tmux kill-server` returns before the server process actually finishes
+# reaping its children - measured directly (see the fix this test file is
+# for): ~0ms for a 1-pane tree, ~3.4s for a 100-pane one. A test case with a
+# large session tree (e.g. case4b's 50+ phantom sessions) followed
+# immediately by the next case's setup() starting a fresh server on the
+# SAME socket path can hit that exact race between test cases, producing
+# "server exited unexpectedly"/"no server running" failures that have
+# nothing to do with whatever that next case is actually testing. Waits for
+# the OLD server's process to actually exit (not just for its socket to
+# stop answering, which can happen before the process is fully gone) before
+# returning, so setup()/teardown() themselves are never a source of test
+# flakiness.
+_kill_test_server_and_wait() {
+	local pid socket_path
+	# Ask the live server for its own canonical socket path rather than
+	# constructing one - two dead ends confirmed directly: (1) tmux resolves
+	# its socket directory from $TMUX_TMPDIR or /tmp, never $TMPDIR, so
+	# environments where $TMPDIR happens to also be set (common on macOS)
+	# make guessing the wrong base directory an easy mistake; (2) even with
+	# the right base directory, macOS's /tmp is a symlink to /private/tmp
+	# and `lsof -t` does not dereference it when matching a socket path
+	# argument - it needs the literal canonical path. #{socket_path}
+	# already gives us that path pre-resolved, sidestepping both problems.
+	socket_path="$(tmux -L "$TEST_SOCKET" display-message -p '#{socket_path}' 2>/dev/null)"
+	[ -n "$socket_path" ] && pid="$(lsof -t "$socket_path" 2>/dev/null | head -1)"
+	tmux -L "$TEST_SOCKET" kill-server 2>/dev/null
+	[ -n "$pid" ] || return 0
+	local waited=0
+	while kill -0 "$pid" 2>/dev/null; do
+		sleep 0.05
+		waited=$((waited + 1))
+		[ "$waited" -ge 200 ] && break   # 10s cap, comfortably past the measured worst case
+	done
+}
+
 setup() {
 	TEST_PERSIST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/persist-test.XXXXXX")"
-	tmux -L "$TEST_SOCKET" kill-server 2>/dev/null
+	_kill_test_server_and_wait
 	# Fresh server that does NOT load the user's tmux config.
 	tmuxp -f /dev/null new-session -d -s _bootstrap
 	tmuxp set -g @persist-dir "$TEST_PERSIST_DIR"
 }
 
 teardown() {
-	tmux -L "$TEST_SOCKET" kill-server 2>/dev/null
+	_kill_test_server_and_wait
 	[ -n "$TEST_PERSIST_DIR" ] && rm -rf "$TEST_PERSIST_DIR"
 	TEST_PERSIST_DIR=""
+	[ -n "${SABOTAGE_SCRIPT:-}" ] && rm -f "$SABOTAGE_SCRIPT"
 }
 
 # Run plugin scripts through tmux run-shell (so $TMUX is set) and wait a beat.
@@ -50,6 +110,253 @@ make_session() { # name marker
 
 pane_text() { tmuxp capture-pane -pt "$1" -S -200 2>/dev/null; }
 
+# Live pane count for one session, across all its windows. Not
+# `list-panes -t X -a`: despite the -t, tmux's -a flag lists every pane on the
+# whole server and ignores -t entirely - session-scoping needs -s instead.
+live_pane_count() {
+	tmuxp list-panes -s -t "$1" 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Like restore(), but redirects the restore script's own stderr into $1
+# (truncated first) instead of letting it go wherever `tmux run-shell` sends a
+# job's stderr (nowhere useful - only a job's stdout is forwarded to the
+# invoking client). This is the only way to see the plain `echo ... >&2`
+# failure lines the all-sessions retry logic is expected to write.
+# `tmux run-shell` blocks until the shell-command finishes, so by the time
+# this returns the whole (possibly-retried) restore is already done - the
+# trailing sleep is only to let tmux's own state settle, same as restore().
+restore_capture_stderr() { # errfile [args...]
+	local errfile="$1"; shift
+	: > "$errfile"
+	tmuxp run-shell "$PLUGIN_DIR/scripts/restore.sh $* quiet 2>>'$errfile'"
+	sleep 1.5
+}
+
+# Same as restore_capture_stderr, but backgrounded so the caller can poll
+# (see poll_until) for the failure line to appear and time it, rather than
+# only finding out after the whole (possibly long, budget-scaled) run
+# finishes. Bounding the wait this way also means a runaway/never-gives-up
+# implementation fails the test instead of hanging the suite.
+restore_capture_stderr_bg() { # errfile [args...]
+	local errfile="$1"; shift
+	: > "$errfile"
+	tmuxp run-shell "$PLUGIN_DIR/scripts/restore.sh $* quiet 2>>'$errfile'" &
+}
+
+# Arms $1 (a hook name, e.g. "pre-restore-all") to append one line to $2 each
+# time it fires - a cheap way to assert a hook fired exactly N times.
+set_counter_hook() { # hook_name counter_file
+	tmuxp set -g "@persist-hook-$1" "echo 1 >> '$2'"
+}
+
+# Number of times a counter hook armed via set_counter_hook has fired so far.
+hook_fire_count() { # counter_file
+	if [ -f "$1" ]; then wc -l < "$1" | tr -d ' '; else echo 0; fi
+}
+
+# Arms tmux's own native after-new-window/after-split-window hooks (NOT
+# tmux-persist's @persist-hook-* system, and deliberately NOT
+# after-new-session - see below) to kill the most-recently-created live pane
+# belonging to session $1 the instant restore_all_panes() creates one,
+# manufacturing a reproducible pane-count mismatch without depending on real
+# kill-server teardown timing. These fire synchronously as part of the same
+# tmux command that creates the pane/window - confirmed directly, no race.
+# Deliberately NOT using @persist-hook-pre-restore-pane-processes: that fires
+# once per session (not once per pane, and not during retries - see
+# restore_structure_properties() in restore.sh), so it can't manufacture a
+# mismatch *during* the retry-safe creation step the fix actually retries.
+#
+# Deliberately NOT after-new-session either: that fires on a session's
+# FIRST/only pane, and killing a session's only pane kills the whole
+# session with it - confirmed directly, this cascades into restore.sh's own
+# SUBSEQUENT commands (e.g. select-pane on a pane index that never got
+# created, split-window against a session that no longer exists) failing
+# with real, unrelated tmux errors ("can't find session", "can't find
+# pane") that leak onto stderr and are easily mistaken for this fix's own
+# failure-reporting output. Restricting to after-new-window/after-split-window
+# guarantees the target session's first pane is never touched, so a kill
+# only ever removes one of several panes - a clean, non-destructive
+# mismatch, not a session-destroying one.
+#
+# The kill logic lives in a standalone script file, not an inline quoted
+# string: a hook's VALUE goes through tmux's own command parser AND its
+# format-expansion, and the kill logic needs its own nested quotes/braces
+# (`[ -n "$p" ]`, `#{pane_id}`) - inlined, those collide with the hook
+# string's own quoting and get prematurely format-expanded (confirmed
+# directly: both broke silently, one as a parse error, one as a literal
+# pane id spliced into the command text before the nested list-panes call
+# ever saw it). A script file sidesteps both: its contents are never parsed
+# or format-expanded by tmux at all, only executed by bash.
+#   mode "once"   - kills a pane only the first time $1 actually has 2+ live
+#                   panes, then never again (tracked via flag file $3) - used
+#                   to make exactly one attempt fail before a clean retry.
+#   mode "always" - kills a pane every time $1 has 2+ live panes - used to
+#                   make every attempt fail (persistent-failure cases). For a
+#                   session with only ever 1 saved pane, this mode never
+#                   fires (nothing non-first to kill) - use a multi-pane
+#                   session for persistent-failure test cases.
+#   $3 unused in "always" mode.
+# Other sessions restored in the same run are unaffected: these are global
+# hooks (fire for every session's creation events), but the kill command
+# itself targets session $1 by name, so it's a no-op for any other session.
+SABOTAGE_SCRIPT="${TMPDIR:-/tmp}/persist-test-sabotage-$$.sh"
+_write_sabotage_script() {
+	cat > "$SABOTAGE_SCRIPT" <<'EOF'
+#!/usr/bin/env bash
+session="$1"; mode="$2"; flag="$3"
+[ "$mode" = "once" ] && [ -f "$flag" ] && exit 0
+count="$(tmux list-panes -t "$session" 2>/dev/null | wc -l | tr -d ' ')"
+[ "${count:-0}" -ge 2 ] || exit 0
+p="$(tmux list-panes -t "$session" -F '#{pane_id}' 2>/dev/null | tail -1)"
+[ -n "$p" ] || exit 0
+tmux kill-pane -t "$p" 2>/dev/null
+if [ "$mode" = "once" ]; then touch "$flag"; fi
+exit 0
+EOF
+	chmod +x "$SABOTAGE_SCRIPT"
+}
+set_sabotage_hook() { # session mode [flag_file]
+	local session="$1" mode="$2" flag="$3"
+	_write_sabotage_script
+	local hook_cmd="run-shell \"'$SABOTAGE_SCRIPT' '$session' '$mode' '$flag'\""
+	local h
+	for h in after-new-window after-split-window; do
+		tmuxp set-hook -g "$h" "$hook_cmd"
+	done
+}
+
+# Clears all three native hooks set-hook installs, so a later test case in
+# the same file doesn't inherit a still-armed sabotage from an earlier one.
+clear_sabotage_hook() {
+	local h
+	for h in after-new-session after-new-window after-split-window; do
+		tmuxp set-hook -gu "$h" 2>/dev/null
+	done
+}
+
+# --- window/pane focus inspection (added for deferred-focus-restore tests) ---
+#
+# Server-side "active window"/"active pane" state exists independent of any
+# attached client (tmux tracks exactly one active window per session and one
+# active pane per window regardless of whether a client is looking at them),
+# so these can be read headlessly, without needing a real attached client.
+# Mirrors save.sh's own get_active_window_index/get_alternate_window_index.
+active_window_index() { # session
+	tmuxp list-windows -t "$1" -F "#{window_active} #{window_index}" 2>/dev/null |
+		awk '$1 == 1 { print $2 }'
+}
+
+alternate_window_index() { # session
+	tmuxp list-windows -t "$1" -F "#{window_flags} #{window_index}" 2>/dev/null |
+		awk '$1 ~ /-/ { print $2 }'
+}
+
+active_pane_index() { # session:window
+	tmuxp list-panes -t "$1" -F "#{pane_active} #{pane_index}" 2>/dev/null |
+		awk '$1 == 1 { print $2 }'
+}
+
+# --- control-mode client helpers (added for deferred-focus-restore tests) ---
+#
+# `tmux -C attach-session` (control mode) is a real attached client with no
+# real TTY needed - confirmed empirically: it fires tmux's native
+# client-attached hook and shows up in `list-clients` exactly like a normal
+# interactive attach. Left with stdin already at EOF, though, it exits
+# (`%exit`) immediately after attaching, before anything can rely on it
+# still being attached. Holding its stdin open against a FIFO that we also
+# hold open on our side (`exec N<>fifo`, both ends) keeps it attached
+# indefinitely, until we explicitly close our end and kill it.
+CONTROL_CLIENT_RECORDS=()
+_control_client_next_fd=20
+# Out-parameter set by attach_control_client, since it must be called as a
+# plain statement, NOT via "$(...)" - command substitution forks a subshell,
+# and this function mutates globals (CONTROL_CLIENT_RECORDS,
+# _control_client_next_fd) that a subshell's copy would silently discard on
+# exit, leaving the real (parent-shell) bookkeeping stuck empty forever and
+# every call colliding on the same fifo/fd (confirmed directly: that's
+# exactly what happened before this was switched to an out-parameter).
+CONTROL_CLIENT_PID=""
+
+# Attaches a persistent control-mode client to session $1 and blocks until
+# the server actually registers it. Sets $CONTROL_CLIENT_PID to the client
+# process's pid (pass it to detach_control_client later). Call as a plain
+# statement: `attach_control_client foo; local pid="$CONTROL_CLIENT_PID"` -
+# NOT `pid="$(attach_control_client foo)"` (see CONTROL_CLIENT_PID above).
+attach_control_client() { # session
+	local session="$1"
+	# mktemp -u for a guaranteed-unique path per call, rather than deriving
+	# one from the record count - safe even if a call is ever made from a
+	# subshell (where mutations to CONTROL_CLIENT_RECORDS itself are lost,
+	# but two calls must still never collide on the same fifo path).
+	local fifo out
+	fifo="$(mktemp -u "$TEST_PERSIST_DIR/.ctrl-fifo.XXXXXX")"
+	out="$(mktemp -u "$TEST_PERSIST_DIR/.ctrl-out.XXXXXX")"
+	mkfifo "$fifo"
+	local fd=$_control_client_next_fd
+	_control_client_next_fd=$((_control_client_next_fd + 1))
+	eval "exec ${fd}<>'$fifo'"
+	eval "tmuxp -C attach-session -t '$session' <&${fd} >'$out' 2>&1 &"
+	local pid=$!
+	CONTROL_CLIENT_RECORDS+=("${pid}:${fd}:${fifo}")
+	local target_count="${#CONTROL_CLIENT_RECORDS[@]}" i=0
+	while [ "$i" -lt 25 ]; do
+		[ "$(tmuxp list-clients 2>/dev/null | \grep -c 'control-mode')" -ge "$target_count" ] && break
+		sleep 0.2
+		i=$((i + 1))
+	done
+	CONTROL_CLIENT_PID="$pid"
+}
+
+# Detaches one control client previously returned by attach_control_client:
+# closes our side of its stdin fifo (so the client sees EOF), kills the
+# process if it hasn't already exited, and removes the fifo file.
+detach_control_client() { # pid
+	local target="$1" rec pid fd fifo
+	local -a keep=()
+	for rec in "${CONTROL_CLIENT_RECORDS[@]}"; do
+		pid="${rec%%:*}"
+		if [ "$pid" = "$target" ]; then
+			fd="${rec#*:}"; fd="${fd%%:*}"
+			fifo="${rec##*:}"
+			eval "exec ${fd}>&-" 2>/dev/null
+			kill "$pid" 2>/dev/null
+			wait "$pid" 2>/dev/null
+			rm -f "$fifo"
+		else
+			keep+=("$rec")
+		fi
+	done
+	CONTROL_CLIENT_RECORDS=("${keep[@]}")
+}
+
+# Detaches every control client still tracked from attach_control_client.
+# teardown() itself only kills the tmux server - it knows nothing about
+# these background client processes/fifos, so test files call this
+# themselves first.
+detach_all_control_clients() {
+	local rec pid
+	for rec in "${CONTROL_CLIENT_RECORDS[@]}"; do
+		pid="${rec%%:*}"
+		detach_control_client "$pid"
+	done
+}
+
+# Polls condition command $2.. every 0.2s until it exits 0 or $1 seconds pass.
+# Returns the condition's last exit status. Used instead of a fixed sleep when
+# the wait time itself varies by design (e.g. a retry give-up whose length
+# scales with fleet size).
+poll_until() { # timeout_seconds condition...
+	local timeout="$1"; shift
+	local max_iters=$(( timeout * 5 ))
+	local i=0
+	while [ "$i" -lt "$max_iters" ]; do
+		"$@" && return 0
+		sleep 0.2
+		i=$((i + 1))
+	done
+	"$@"
+}
+
 # assertions
 _ok() { TESTS_PASSED=$((TESTS_PASSED + 1)); printf '  ok   - %s\n' "$1"; }
 _ko() { TESTS_FAILED=$((TESTS_FAILED + 1)); printf '  FAIL - %s\n' "$1"; }
@@ -59,6 +366,7 @@ assert_not_contains() { case "$1" in *"$2"*) _ko "$3 (unexpected: $2)";; *) _ok 
 assert_file()         { [ -e "$1" ] && _ok "$2" || _ko "$2 (no file: $1)"; }
 assert_no_file()      { [ ! -e "$1" ] && _ok "$2" || _ko "$2 (exists: $1)"; }
 assert_eq()           { [ "$1" = "$2" ] && _ok "$3" || _ko "$3 (got '$1', want '$2')"; }
+assert_ne()            { [ "$1" != "$2" ] && _ok "$3" || _ko "$3 (both '$1' == '$2')"; }
 
 finish() {
 	echo "  -> ${TESTS_PASSED} passed, ${TESTS_FAILED} failed"

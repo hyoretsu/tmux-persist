@@ -25,8 +25,9 @@ No configuration is required. You should feel like you never quit tmux.
 It even (optionally)
 [restores vim and neovim sessions](docs/restoring_vim_and_neovim_sessions.md)!
 
-Automatic restoring and continuous saving of tmux env is also possible with
-[tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) plugin.
+Automatic saving and restoring already happens on its own (see below) - no
+extra plugin needed for that. For periodic saving on a fixed timer,
+independent of any attached client, see "Other goodies" below.
 
 ### Screencast
 
@@ -40,7 +41,10 @@ Automatic restoring and continuous saving of tmux env is also possible with
 Each session is saved separately to its own files, so save and restore only
 ever touch the session you are in — restore never recreates or switches you to
 other sessions. To save/restore a specific session by name, run
-`scripts/save.sh <session-name>` / `scripts/restore.sh <session-name>`.
+`scripts/save.sh <session-name>` / `scripts/restore.sh <session-name>`. To
+restore every saved session at once (e.g. after losing the whole tmux
+server), run `scripts/restore.sh all` - see
+[restoring a previously saved environment](docs/restoring_previously_saved_environment.md).
 
 Saving and restoring also happen **automatically**: sessions are saved on
 detach, disconnect and exit, and restored when a session is (re)created. See
@@ -164,7 +168,12 @@ You should now be able to use the plugin.
 - [tmux-open](https://github.com/tmux-plugins/tmux-open) - a plugin for quickly
   opening highlighted file or a url
 - [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) - automatic
-  restoring and continuous saving of tmux env
+  restoring and continuous saving of tmux env; both work with tmux-persist via
+  small compatibility wrappers, see [tmux-continuum compatibility](docs/continuum_compat.md)
+- [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
+  save-only supplement to continuum: crash-protects long-running background
+  work (e.g. server-side scripts) even if no terminal is open; continuum
+  requires an attached terminal
 
 ### Reporting bugs and contributing
 

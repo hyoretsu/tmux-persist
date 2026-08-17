@@ -26,7 +26,7 @@ Multiple keys can be given, space-separated. See also
 | Option | Default | Description |
 |---|---|---|
 | `@persist-processes` | `''` | Extra programs to restore. A space-separated list (`'mosh-server irb'`); `':all:'` restores everything; `'false'` restores nothing. |
-| `@persist-default-processes` | `vi vim view nvim emacs man less more tail top htop irssi weechat mutt` | The built-in allow-list of programs restored by default. Override to change it. |
+| `@persist-default-processes` | `vi vim view nvim emacs man less more tail top htop irssi weechat mutt claude codex copilot cursor-agent agy gemini opencode` | The built-in allow-list of programs restored by default (includes AI agent CLIs, see [restoring_agent_sessions.md](restoring_agent_sessions.md)). Override to change it. |
 | `@persist-strategy-<program>` | — | Per-program restore strategy, e.g. `set -g @persist-strategy-vim 'session'`. |
 | `@persist-save-command-strategy` | `ps` | How a pane's full command line is detected at save time. |
 

@@ -1,13 +1,16 @@
 # Restoring previously saved environment
 
 Each session is saved separately. The files for a session named `foo` look
-like this (one timestamped snapshot per save, plus a `foo_last` symlink to the
-most recent one and a `foo_pane_contents.tar.gz` archive):
+like this (one timestamped snapshot per save, plus a `foo_last` symlink to
+the most recent one):
 
-    foo_20260619T184107.txt
-    foo_20260619T184108.txt
-    foo_last -> foo_20260619T184108.txt
-    foo_pane_contents.tar.gz
+    foo_20260619T184107.tgz
+    foo_20260619T184108.tgz
+    foo_last -> foo_20260619T184108.tgz
+
+Each `.tgz` bundles that snapshot's layout and pane contents together - see
+[restoring pane contents](restoring_pane_contents.md) for the on-disk format,
+including the alternate `separate` layout (`@persist-snapshot-format`).
 
 None of the previous saves are deleted (unless you explicitly do that). All save
 files are kept in `~/.tmux/persist/` directory, or `~/.local/share/tmux/persist`
@@ -19,11 +22,38 @@ argument:
 
     $ ~/path/to/tmux-persist/scripts/restore.sh foo
 
+## Restoring everything at once
+
+If you've lost the whole tmux server (a crash, a reboot, `tmux kill-server`)
+and want every saved session back, not just one, run the restore script with
+`all` instead of a session name:
+
+    $ ~/path/to/tmux-persist/scripts/restore.sh all
+
+This recreates every session that has a saved snapshot - sessions, windows,
+panes, working directories, layout and foreground processes - in one pass.
+It's the bulk counterpart to `scripts/save.sh all`, which
+`@persist-save-on-exit`'s hooks already use for the same reason (no single
+"current session" to target).
+
+Which pane/window/session had focus is restored too. That needs a real
+attached client (`switch-client`), which usually doesn't exist yet at the
+point you'd run this - right after starting a fresh, otherwise-empty tmux
+server. If no client is attached yet, focus restoration is deferred until
+one actually attaches; everything else (sessions, windows, panes, working
+directories, layout, foreground processes) comes back immediately either
+way.
+
+There's no key binding for this (same as `save.sh all`, which is also
+script/hook-only) - run it directly, or wire it into your own tmux startup
+if you want it automatic.
+
 Here are the steps to restore a session to a previous point in time:
 
 - `$ cd ~/.tmux/persist/`
 - locate the snapshot you'd like to use for restore (file names have a timestamp)
-- point the session's `last` symlink at it: `$ ln -sf <session>_<timestamp>.txt <session>_last`
+- point the session's `last` symlink at it: `$ ln -sf <session>_<timestamp>.tgz <session>_last`
+  (`.txt` instead of `.tgz` if you're on `@persist-snapshot-format 'separate'`)
 - create a session with that name and do a restore with the `tmux-persist` key:
   `prefix + Ctrl-r`
 

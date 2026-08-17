@@ -164,11 +164,9 @@ You should now be able to use the plugin.
   opening highlighted file or a url
 - [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum) - automatic
   restoring and continuous saving of tmux env
-  (note: its periodic *save* works with tmux-persist via a small
-  compatibility wrapper - see #97. Its automatic *restore-on-boot* still
-  doesn't: `restore.sh` has no "restore every session" mode and boot-time
-  restore has no attached client to begin with, which runs into the
-  existing #31 regardless of anything continuum does)
+  (note: both its periodic *save* and its boot-time *restore* work with
+  tmux-persist via small compatibility wrappers - see
+  [tmux-continuum compatibility](docs/continuum_compat.md))
 - [tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave) -
   periodic full-fleet saves via a macOS launchd timer. With an attached
   client, this covers the same crash-protection ground as continuum's save

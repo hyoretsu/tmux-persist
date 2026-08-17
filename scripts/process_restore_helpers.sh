@@ -15,8 +15,20 @@ restore_pane_process() {
 	local dir="$5"
 	local command
 	if _process_should_be_restored "$pane_full_command" "$session_name" "$window_number" "$pane_index"; then
-		tmux switch-client -t "${session_name}:${window_number}"
-		tmux select-pane -t "$pane_index"
+		# Purely cosmetic (so an attached client visually follows along as
+		# processes relaunch pane by pane) - send-keys below already targets
+		# the pane directly by its full "session:window.pane" address, so
+		# the process itself restores correctly either way. Skipped with no
+		# attached client (e.g. a boot-time "restore everything" with
+		# nobody watching): switch-client fails loudly ("no current
+		# client") in that case, and the unqualified select-pane right
+		# after it - relying on switch-client having set the "current"
+		# window - would otherwise mark some pane active in whatever
+		# unrelated window tmux considers "current" server-side.
+		if tmux list-clients 2>/dev/null | \grep -q .; then
+			tmux switch-client -t "${session_name}:${window_number}"
+			tmux select-pane -t "$pane_index"
+		fi
 
 		local inline_strategy="$(_get_inline_strategy "$pane_full_command")" # might not be defined
 		if [ -n "$inline_strategy" ]; then

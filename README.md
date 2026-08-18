@@ -139,11 +139,15 @@ You should now be able to use the plugin.
   refreshed instead, so frequent auto-saves on detach don't pile up duplicates.
   Disable with `set -g @persist-skip-unchanged 'off'` to always write a new
   snapshot.
-- Unnamed sessions are not saved. tmux gives a session started without a name
-  (plain `tmux` / `tmux new`) a numeric name (`0`, `1`, …) that won't match
-  anything on restore, so these throwaway sessions are skipped instead of
-  littering the persist dir with `8_last` snapshots. Opt in with
-  `set -g @persist-save-unnamed 'on'`.
+- Unnamed sessions are saved like any other, by default - even though tmux
+  gives a session started without a name (plain `tmux` / `tmux new`) a numeric
+  name (`0`, `1`, …) that won't match anything on restore, a session can also
+  be deliberately named something that happens to look numeric (a ticket
+  number, a port, a year), and there's no way to always tell the two apart.
+  Opt out with `set -g @persist-save-unnamed 'off'` to skip genuinely-unnamed
+  sessions and avoid littering the persist dir with `8_last` snapshots - a
+  message is shown if a skip ever turns out to be a real, deliberately-named
+  session.
 - Each snapshot bundles its layout and pane contents in one file by default.
   Store them apart with `set -g @persist-snapshot-format 'separate'`. See
   [restoring pane contents](docs/restoring_pane_contents.md) for what a snapshot

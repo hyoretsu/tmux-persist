@@ -63,7 +63,7 @@ See [restoring pane contents](restoring_pane_contents.md).
 |---|---|---|
 | `@persist-save-on-exit` | `on` | Auto-save on `client-detached` and `session-closed` (detach, disconnect, exit). `'off'` removes the hooks. |
 | `@persist-auto-restore` | `on` | Auto-restore a session's contents when a session of that name is created. `'off'` removes the hook. |
-| `@persist-save-unnamed` | `off` | Save sessions with no explicit name (numeric tmux names like `0`, `1`, …). Off by default since their name matches nothing on restore; `'on'` saves them too. |
+| `@persist-save-unnamed` | `on` | Save sessions with no explicit name (numeric tmux names like `0`, `1`, …). On by default so nothing is ever silently skipped; `'off'` skips them to avoid persist-dir clutter, since their auto-assigned name usually matches nothing on restore. |
 
 See [automatic saving and restoring](auto_save_and_restore.md), which also
 covers saving on `Ctrl-d` via shell integration.

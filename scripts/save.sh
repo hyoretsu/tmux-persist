@@ -265,11 +265,35 @@ dump_pane_contents() {
 save_session() {
 	local session="$1"
 
-	# Skip unnamed (numeric-named) sessions unless the user opts in. Their name
-	# is an ephemeral tmux counter that won't match anything on restore, so
-	# saving them just litters the persist dir with "8_<ts>" snapshots.
+	# Skip unnamed (numeric-named) sessions, but only if the user explicitly
+	# opts out of saving them (@persist-save-unnamed off) - saved normally by
+	# default, like any other session, so nothing is ever silently dropped out
+	# of the box. Their name is usually an ephemeral tmux counter that won't
+	# match anything on restore, so saving them by default just litters the
+	# persist dir with "8_<ts>" snapshots - opting out trades that clutter for
+	# a narrow residual risk (see is_session_unnamed, variables.sh).
 	if [ "$(get_tmux_option "$save_unnamed_option" "$default_save_unnamed")" != "on" ] \
 		&& is_session_unnamed "$session"; then
+		# Never silent when there's an actual chance of being seen: the narrow
+		# residual case is_session_unnamed() can't rule out (the name
+		# coincidentally matches this session's own hidden id counter) still
+		# deserves a chance to be noticed and corrected - rename the session,
+		# or set @persist-save-unnamed on. Warned only once per session (a
+		# session-scoped option, not a file - it goes away on its own when
+		# the session closes) so a long-lived throwaway session doesn't
+		# re-nag on every detach/close - but only once the warning actually
+		# had a client to show up in: display-message needs SOME client
+		# attached somewhere on the server, `-t` or not, and a fully headless
+		# auto-save (no client attached anywhere) has none. Not marking
+		# "warned" on that failure means the next save attempt - possibly
+		# with a real client attached - gets another chance to actually show
+		# it, instead of the warning being silently lost to a save cycle
+		# nobody could have seen it in anyway.
+		if [ "$(tmux show-options -t "$session" -qv "$unnamed_warned_option" 2>/dev/null)" != "1" ]; then
+			if display_message "tmux-persist: skipped saving unnamed session '$session' - set @persist-save-unnamed on to save sessions like this" "" "$session"; then
+				tmux set-option -t "$session" "$unnamed_warned_option" 1 2>/dev/null
+			fi
+		fi
 		return
 	fi
 

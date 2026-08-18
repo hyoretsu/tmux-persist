@@ -35,16 +35,20 @@ get_tmux_option() {
 }
 
 # Ensures a message is displayed for 5 seconds in tmux prompt.
-# Does not override the 'display-time' tmux option.
+# Does not override the 'display-time' tmux option. Returns whether the
+# message actually landed in tmux's own message log, so a caller can tell if
+# it had a client to show up in - `-t` picks WHICH session/client context to
+# use, it does not manufacture a client: with zero clients attached anywhere
+# on the server (a real, common state for a headless auto-save),
+# display-message can fail ("no current client") without ever logging
+# anything. This can't be detected from its exit status alone - confirmed
+# empirically that it can print that error to stderr and still exit 0 - so
+# the log is checked directly instead.
+# $2 (display_duration) and $3 (target session) are both optional.
 display_message() {
 	local message="$1"
-
-	# display_duration defaults to 5 seconds, if not passed as an argument
-	if [ "$#" -eq 2 ]; then
-		local display_duration="$2"
-	else
-		local display_duration="5000"
-	fi
+	local display_duration="${2:-5000}"
+	local target="$3"
 
 	# saves user-set 'display-time' option
 	local saved_display_time=$(get_tmux_option "display-time" "750")
@@ -52,11 +56,19 @@ display_message() {
 	# sets message display time to 5 seconds
 	tmux set-option -gq display-time "$display_duration"
 
-	# displays message
-	tmux display-message "$message"
+	# displays message - explicitly targeted at $target when given, instead of
+	# relying on tmux's ambient "current client" resolution, which is
+	# ambiguous when more than one client is attached
+	if [ -n "$target" ]; then
+		tmux display-message -t "$target" "$message" 2>/dev/null
+	else
+		tmux display-message "$message" 2>/dev/null
+	fi
 
 	# restores original 'display-time' value
 	tmux set-option -gq display-time "$saved_display_time"
+
+	tmux show-messages 2>/dev/null | \grep -qF -- "$message"
 }
 
 
@@ -220,10 +232,22 @@ is_session_grouped() {
 }
 
 # tmux gives a session created without an explicit name (e.g. plain `tmux` or
-# `tmux new`) a numeric name: 0, 1, 2, ... A purely numeric name therefore means
-# "unnamed/default". Used to skip saving throwaway sessions by default.
+# `tmux new`) a name equal to its own internal session_id counter (tmux's
+# session.c: name = str(id)). That id is a server-lifetime, monotonic,
+# never-reused counter, exposed as #{session_id} (formatted "$N") - so
+# comparing the name against the session's OWN id is a far more reliable
+# signal than pattern-matching the name alone: it's exact for genuine
+# auto-naming, and only false-positives if a user's chosen numeric name
+# happens to equal that specific session's hidden counter value - only
+# plausible for small numbers early in a server's life.
+# A deliberately-named port/year/ticket number (e.g. "8080", "2026") can't
+# coincidentally collide with an unrelated internal counter like that.
 is_session_unnamed() {
-	[[ "$1" =~ ^[0-9]+$ ]]
+	local session_name="$1"
+	[[ "$session_name" =~ ^[0-9]+$ ]] || return 1
+	local session_id
+	session_id="$(tmux display-message -p -t "$session_name" -F '#{session_id}' 2>/dev/null)"
+	[ "$session_name" = "${session_id#\$}" ]
 }
 
 # pane content file helpers

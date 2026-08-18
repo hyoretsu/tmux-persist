@@ -35,16 +35,20 @@ get_tmux_option() {
 }
 
 # Ensures a message is displayed for 5 seconds in tmux prompt.
-# Does not override the 'display-time' tmux option.
+# Does not override the 'display-time' tmux option. Returns whether the
+# message actually landed in tmux's own message log, so a caller can tell if
+# it had a client to show up in - `-t` picks WHICH session/client context to
+# use, it does not manufacture a client: with zero clients attached anywhere
+# on the server (a real, common state for a headless auto-save),
+# display-message can fail ("no current client") without ever logging
+# anything. This can't be detected from its exit status alone - confirmed
+# empirically that it can print that error to stderr and still exit 0 - so
+# the log is checked directly instead.
+# $2 (display_duration) and $3 (target session) are both optional.
 display_message() {
 	local message="$1"
-
-	# display_duration defaults to 5 seconds, if not passed as an argument
-	if [ "$#" -eq 2 ]; then
-		local display_duration="$2"
-	else
-		local display_duration="5000"
-	fi
+	local display_duration="${2:-5000}"
+	local target="$3"
 
 	# saves user-set 'display-time' option
 	local saved_display_time=$(get_tmux_option "display-time" "750")
@@ -52,11 +56,19 @@ display_message() {
 	# sets message display time to 5 seconds
 	tmux set-option -gq display-time "$display_duration"
 
-	# displays message
-	tmux display-message "$message"
+	# displays message - explicitly targeted at $target when given, instead of
+	# relying on tmux's ambient "current client" resolution, which is
+	# ambiguous when more than one client is attached
+	if [ -n "$target" ]; then
+		tmux display-message -t "$target" "$message" 2>/dev/null
+	else
+		tmux display-message "$message" 2>/dev/null
+	fi
 
 	# restores original 'display-time' value
 	tmux set-option -gq display-time "$saved_display_time"
+
+	tmux show-messages 2>/dev/null | \grep -qF -- "$message"
 }
 
 
@@ -219,6 +231,25 @@ is_session_grouped() {
 	[[ "$GROUPED_SESSIONS" == *"${d}${session_name}${d}"* ]]
 }
 
+# tmux gives a session created without an explicit name (e.g. plain `tmux` or
+# `tmux new`) a name equal to its own internal session_id counter (tmux's
+# session.c: name = str(id)). That id is a server-lifetime, monotonic,
+# never-reused counter, exposed as #{session_id} (formatted "$N") - so
+# comparing the name against the session's OWN id is a far more reliable
+# signal than pattern-matching the name alone: it's exact for genuine
+# auto-naming, and only false-positives if a user's chosen numeric name
+# happens to equal that specific session's hidden counter value - only
+# plausible for small numbers early in a server's life.
+# A deliberately-named port/year/ticket number (e.g. "8080", "2026") can't
+# coincidentally collide with an unrelated internal counter like that.
+is_session_unnamed() {
+	local session_name="$1"
+	[[ "$session_name" =~ ^[0-9]+$ ]] || return 1
+	local session_id
+	session_id="$(tmux display-message -p -t "$session_name" -F '#{session_id}' 2>/dev/null)"
+	[ "$session_name" = "${session_id#\$}" ]
+}
+
 # pane content file helpers
 
 # A snapshot stores a session's layout and (optionally) its pane contents. Two
@@ -323,8 +354,34 @@ snapshot_create() {
 	else
 		tar czf "$primary" -C "$staging" .
 	fi
-	ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
-	printf '%s\n' "$new_hash" > "$hash_file"
+	# Only repoint "last" at a non-empty snapshot, and only then record its
+	# hash. A 0-byte primary means the save was interrupted/failed (e.g. the
+	# tmux socket vanished mid-save); the previous good pointer must survive
+	# instead of being clobbered with a file that makes restore fail - and, on
+	# auto-restore, can make tmux exit immediately. Skipping the hash write too
+	# means the next save retries for real instead of skip_unchanged matching
+	# a hash that was never actually persisted. (tmux-resurrect#115, #403)
+	if [ -s "$primary" ]; then
+		ln -fs "$(basename "$primary")" "$(last_session_file "$session")"
+		printf '%s\n' "$new_hash" > "$hash_file"
+	else
+		rm -f "$primary"
+		# "separate" format may have already written a companion pane-contents
+		# archive for this same (now-discarded) primary before we got here -
+		# nothing else ever removes it (remove_old_backups()'s pruning glob only
+		# matches a companion alongside a surviving primary of the same
+		# timestamp), so it would otherwise leak on disk forever.
+		rm -f "$(snapshot_companion_file "$primary")"
+	fi
+}
+
+# True if the session's "last" snapshot exists and is non-empty. A dangling
+# pointer or a 0-byte (corrupt/interrupted) snapshot is treated as no snapshot,
+# so restore skips gracefully instead of failing. (tmux-resurrect#403, #115)
+snapshot_valid() {
+	local session="$1"
+	local last="$(last_session_file "$session")"
+	[ -f "$last" ] && [ -s "$last" ]
 }
 
 # Populates the restore staging area (./layout, ./pane_contents/) from a

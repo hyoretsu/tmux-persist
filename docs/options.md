@@ -48,6 +48,7 @@ See [restoring pane contents](restoring_pane_contents.md).
 |---|---|---|
 | `@persist-dir` | `~/.tmux/persist` (or `$XDG_DATA_HOME/tmux/persist`) | Where snapshots are stored. `$HOME`, `$HOSTNAME` and `~` are expanded; see [save dir](save_dir.md). |
 | `@persist-snapshot-format` | `together` | `'together'`: one `<session>_<ts>.tgz` per snapshot. `'separate'`: a `<session>_<ts>.txt` layout plus a `<session>_<ts>_pane_contents.tgz`. Restore auto-detects either. |
+| `@persist-skip-unchanged` | `on` | Skip writing a snapshot whose content is identical to the session's latest one; the existing snapshot's mtime is refreshed instead. `'off'` always writes a new snapshot. |
 
 ## Retention
 
@@ -62,6 +63,7 @@ See [restoring pane contents](restoring_pane_contents.md).
 |---|---|---|
 | `@persist-save-on-exit` | `on` | Auto-save on `client-detached` and `session-closed` (detach, disconnect, exit). `'off'` removes the hooks. |
 | `@persist-auto-restore` | `on` | Auto-restore a session's contents when a session of that name is created. `'off'` removes the hook. |
+| `@persist-save-unnamed` | `on` | Save sessions with no explicit name (numeric tmux names like `0`, `1`, …). On by default so nothing is ever silently skipped; `'off'` skips them to avoid persist-dir clutter, since their auto-assigned name usually matches nothing on restore. |
 
 See [automatic saving and restoring](auto_save_and_restore.md), which also
 covers saving on `Ctrl-d` via shell integration.

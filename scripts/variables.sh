@@ -94,6 +94,26 @@ default_save_on_exit="on"
 auto_restore_option="@persist-auto-restore"
 default_auto_restore="on"
 
+# Save sessions that have no explicit name. tmux names an unnamed session with a
+# number (0, 1, 2, ...), so these are usually throwaway sessions whose numeric
+# name won't match anything on restore - but a session can also be
+# deliberately, explicitly named something that happens to look numeric (a
+# ticket number, a port, a year), and there is no way to tell the two apart
+# with certainty (see is_session_unnamed). Saved by default, like any other
+# session, so nothing is ever silently dropped out of the box; set to 'off' to
+# skip genuinely-unnamed sessions and reduce persist-dir clutter, accepting
+# the narrow residual risk that a deliberately-numeric name coincidentally
+# matching its own session gets skipped too (a warning covers that case - see
+# save_session).
+save_unnamed_option="@persist-save-unnamed"
+default_save_unnamed="on"
+
+# Internal marker (set per session, not user-facing): whether save_session()
+# has already warned about skipping this specific unnamed session, so a
+# long-lived throwaway session only warns once instead of on every
+# detach/close.
+unnamed_warned_option="@persist-unnamed-warned"
+
 # Internal marker (set per server) so the one-time restore of sessions that
 # already exist when the plugin loads runs only once, not on every reload.
 initialized_option="@persist-initialized"

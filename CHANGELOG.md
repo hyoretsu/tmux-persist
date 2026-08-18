@@ -1,5 +1,23 @@
 # Changelog
 
+### v5.1.3, 2026-06-22
+
+- Sessions with no explicit name can now be skipped on save, opt-in, to avoid
+  littering the persist dir with `8_last`-style snapshots for tmux's own
+  auto-numbered throwaway sessions (`set -g @persist-save-unnamed 'off'`).
+  Saved normally by default: a session's numeric name doesn't always mean
+  tmux auto-assigned it (a deliberately-named ticket number, port, or year
+  looks the same), so nothing is ever silently dropped out of the box.
+  Detection compares the name against the session's own internal id (tmux's
+  actual auto-naming formula), and any skip is announced with a one-time
+  message rather than happening silently.
+- Fixes agent CLI session restore for absolute-path launches. When a PATH
+  wrapper `exec`s the real binary (e.g. `/usr/bin/claude` →
+  `/opt/claude-code/bin/claude`), the save strategy records the absolute path;
+  restore matching and strategy lookup now fall back to the executable's
+  basename, so `claude` (and the other agents) is relaunched and resumed
+  instead of left as a bare shell. Bare launches are unaffected.
+
 ### v5.1.2, 2026-06-22
 
 - Extends AI agent CLI session restore to five more agents, all on by default:

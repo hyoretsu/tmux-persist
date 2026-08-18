@@ -115,6 +115,21 @@ assert_eq "$(_get_command_strategy "/opt/claude-code/bin/claude")" "session" \
 	"abs-path claude resolves 'session' strategy via basename"
 assert_eq "$(basename "$(_get_strategy_file "/opt/claude-code/bin/claude")")" "claude_session.sh" \
 	"abs-path claude resolves claude_session.sh"
+
+# --- bare (non-absolute-path) launches: no regression from the basename fallback ---
+# These three functions all changed to add the fallback - re-verify the
+# unmodified, already-working bare-command path still resolves correctly
+# through all three, not just through assert_strategy (which calls the
+# strategy scripts directly and never exercises these functions at all).
+_proc_matches_full_command "claude --resume x" "claude" \
+	&& _ok "bare claude with args still matches 'claude'" \
+	|| _ko "bare claude with args still matches 'claude'"
+assert_eq "$(_command_basename "claude --foo")" "claude" \
+	"_command_basename is a no-op for an already-bare command"
+assert_eq "$(_get_command_strategy "claude")" "session" \
+	"bare claude still resolves 'session' strategy"
+assert_eq "$(basename "$(_get_strategy_file "claude")")" "claude_session.sh" \
+	"bare claude still resolves claude_session.sh"
 unset -f get_tmux_option
 
 # --- wiring (default proc list + default strategy registration) ---

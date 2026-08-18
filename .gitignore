@@ -1,3 +1,13 @@
 run_tests
 tests/run_tests_in_isolation
 tests/helpers/helpers.sh
+
+# Personal AI coding assistant config/skill libraries - not project config,
+# specific to whichever tools/skills a given contributor happens to have
+# installed locally. .serena/project.yml is the one exception kept tracked
+# (small, genuinely project-specific: which language server to run).
+.agents/
+.claude/skills/
+.claude/settings.json
+.codex/
+.copilot/
